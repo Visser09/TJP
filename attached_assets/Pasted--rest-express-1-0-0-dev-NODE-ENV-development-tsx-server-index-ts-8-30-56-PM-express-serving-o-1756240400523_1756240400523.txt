@@ -1,0 +1,62 @@
+
+> rest-express@1.0.0 dev
+> NODE_ENV=development tsx server/index.ts
+
+8:30:56 PM [express] serving on port 5000
+Browserslist: browsers data (caniuse-lite) is 10 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+8:30:59 PM [express] GET /api/auth/user 401 in 2ms :: {"message":"Unauthorized"}
+8:31:00 PM [express] GET /api/auth/user 401 in 0ms :: {"message":"Unauthorized"}
+8:31:24 PM [express] GET /api/auth/user 401 in 1ms :: {"message":"Unauthorized"}
+8:31:32 PM [express] GET /api/auth/user 304 in 133ms :: {"id":"8fe31650-9ab0-4ae7-a7f3-76941ab96968"…
+8:31:32 PM [express] GET /api/trades/recent/ 304 in 58ms :: []
+8:31:32 PM [express] GET /api/trading-accounts 304 in 109ms :: []
+8:31:32 PM [express] GET /api/analytics/performance/ 304 in 104ms :: {"totalPnl":0,"winRate":0,"tota…
+8:31:32 PM [express] GET /api/ai-insights/ 304 in 135ms :: []
+Error generating chat response: BadRequestError: 400 Unsupported value: 'temperature' does not support 0.7 with this model. Only the default (1) value is supported.
+    at Function.generate (/home/runner/workspace/node_modules/openai/src/core/error.ts:72:14)
+    at OpenAI.makeStatusError (/home/runner/workspace/node_modules/openai/src/client.ts:453:28)
+    at OpenAI.makeRequest (/home/runner/workspace/node_modules/openai/src/client.ts:676:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async generateChatResponse (/home/runner/workspace/server/openai.ts:87:22)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:269:24) {
+  status: 400,
+  headers: Headers {
+    date: 'Tue, 26 Aug 2025 20:31:47 GMT',
+    'content-type': 'application/json',
+    'content-length': '247',
+    connection: 'keep-alive',
+    'access-control-expose-headers': 'X-Request-ID',
+    'openai-organization': 'user-p3xdo87slapfsvfdroqnjzob',
+    'openai-processing-ms': '17',
+    'openai-project': 'proj_0PxjfowL9gxt5yqzTOXdWJTc',
+    'openai-version': '2020-10-01',
+    'x-envoy-upstream-service-time': '244',
+    'x-ratelimit-limit-requests': '500',
+    'x-ratelimit-limit-tokens': '30000',
+    'x-ratelimit-remaining-requests': '499',
+    'x-ratelimit-remaining-tokens': '29279',
+    'x-ratelimit-reset-requests': '120ms',
+    'x-ratelimit-reset-tokens': '1.442s',
+    'x-request-id': 'req_48ffd1498e3e4be2a35a245c37ef371d',
+    'cf-cache-status': 'DYNAMIC',
+    'set-cookie': '__cf_bm=d5ddOs5hXfeiElGgH8aivIIB0HjYBzcJ8WWQeXbgdTg-1756240307-1.0.1.1-HUfM206k_kqxCsKA.anOMuzXAD9ofVMP17u5xP29ggZ7.5Wb1_ug8HkUquYUuphYoGydV2JxSkQWw0nAwBC.00Tu260fOjSHLr2RurIIVj0; path=/; expires=Tue, 26-Aug-25 21:01:47 GMT; domain=.api.openai.com; HttpOnly; Secure; SameSite=None, _cfuvid=01NDKZsHA5kfD3l8FFccCSw.bqQ4K4QlRPaBl4Ud27o-1756240307938-0.0.1.1-604800000; path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None',
+    'strict-transport-security': 'max-age=31536000; includeSubDomains; preload',
+    'x-content-type-options': 'nosniff',
+    server: 'cloudflare',
+    'cf-ray': '975618410923a120-SEA',
+    'alt-svc': 'h3=":443"; ma=86400'
+  },
+  requestID: 'req_48ffd1498e3e4be2a35a245c37ef371d',
+  error: {
+    message: "Unsupported value: 'temperature' does not support 0.7 with this model. Only the default (1) value is supported.",
+    type: 'invalid_request_error',
+    param: 'temperature',
+    code: 'unsupported_value'
+  },
+  code: 'unsupported_value',
+  param: 'temperature',
+  type: 'invalid_request_error'
+}
+8:31:47 PM [express] POST /api/ai-chat 200 in 672ms :: {"response":"I'm experiencing some technical …

@@ -9,9 +9,9 @@ export async function generateTradingInsights(trades: any[], journalEntries: any
   suggestions: string;
 }> {
   try {
-    // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+    // the newest OpenAI model is "gpt-4o" which was released August 7, 2025. do not change this unless explicitly requested by the user
     const response = await openai.chat.completions.create({
-      model: "gpt-5",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
@@ -83,9 +83,9 @@ export async function generateChatResponse(message: string, accountId?: string, 
       content: msg.content
     }));
 
-    // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+    // the newest OpenAI model is "gpt-4o" which was released August 7, 2025. do not change this unless explicitly requested by the user
     const response = await openai.chat.completions.create({
-      model: "gpt-5",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
@@ -134,7 +134,7 @@ export async function generateChatResponse(message: string, accountId?: string, 
         }
       ],
       max_completion_tokens: 1000,
-      temperature: 0.7
+      temperature: 1
     });
 
     return response.choices[0].message.content || "I'm sorry, I couldn't generate a response. Please try again.";
@@ -147,7 +147,7 @@ export async function generateChatResponse(message: string, accountId?: string, 
 export async function analyzeTradePerformance(trade: any): Promise<string> {
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-5",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
