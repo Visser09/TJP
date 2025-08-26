@@ -48,20 +48,20 @@ export default function Dashboard() {
 
   if (isLoading || !isAuthenticated) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="w-full h-screen bg-black flex items-center justify-center">
         <div className="text-white">Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <div className="flex">
+    <div className="w-full min-h-screen bg-black text-white overflow-x-hidden">
+      <div className="flex w-full">
         <Sidebar />
-        <div className="flex-1 ml-20">
+        <div className="flex-1 ml-16 sm:ml-20 w-full">
           <Header />
-          <main className="p-8 space-y-8">
-            <div className="flex items-center justify-between">
+          <main className="p-4 sm:p-6 lg:p-8 space-y-6 lg:space-y-8 w-full max-w-none">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <QuickActions 
                 currentAccount={currentAccount}
                 onSyncTrades={() => {
@@ -78,15 +78,15 @@ export default function Dashboard() {
             <MetricsGrid currentAccount={currentAccount} />
             
             {/* Main Content Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8 w-full">
               {/* AI Insights & Recent Trades */}
-              <div className="space-y-6">
+              <div className="space-y-6 w-full">
                 <AiInsights currentAccount={currentAccount} />
                 <RecentTrades currentAccount={currentAccount} />
               </div>
               
               {/* Performance Chart */}
-              <div>
+              <div className="w-full">
                 <PerformanceChart currentAccount={currentAccount} />
               </div>
             </div>

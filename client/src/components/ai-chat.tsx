@@ -107,10 +107,10 @@ export default function AIChat({ currentAccount, isMinimized = false, onToggleMi
 
   if (isMinimized) {
     return (
-      <div className="fixed bottom-4 right-4 z-50">
+      <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50">
         <Button
           onClick={onToggleMinimize}
-          className="bg-apple-blue hover:bg-apple-blue/80 rounded-full w-12 h-12 p-0"
+          className="bg-apple-blue hover:bg-apple-blue/80 rounded-full w-10 h-10 sm:w-12 sm:h-12 p-0"
           data-testid="button-expand-chat"
         >
           <Bot className="w-6 h-6" />
@@ -120,7 +120,7 @@ export default function AIChat({ currentAccount, isMinimized = false, onToggleMi
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-96 h-[600px] bg-gray-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl flex flex-col">
+    <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 w-80 sm:w-96 h-[500px] sm:h-[600px] bg-gray-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-white/10">
         <div className="flex items-center space-x-2">

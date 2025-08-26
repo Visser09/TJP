@@ -82,7 +82,7 @@ export default function MetricsGrid({ currentAccount }: MetricsGridProps) {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" data-testid="metrics-grid">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 w-full" data-testid="metrics-grid">
       {metrics.map((metric) => {
         const Icon = metric.icon;
         return (

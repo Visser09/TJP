@@ -15,7 +15,7 @@ export default function Sidebar() {
   const [location, setLocation] = useLocation();
   
   return (
-    <div className="w-20 bg-gray-900/50 backdrop-blur-xl border-r border-white/10 flex flex-col items-center py-6 fixed h-full z-40">
+    <div className="w-16 sm:w-20 bg-gray-900/50 backdrop-blur-xl border-r border-white/10 flex flex-col items-center py-4 sm:py-6 fixed left-0 top-0 h-screen z-40">
       {/* Logo */}
       <div className="w-10 h-10 bg-apple-blue rounded-xl flex items-center justify-center mb-8" data-testid="logo">
         <BarChart3 className="w-5 h-5 text-white" />
