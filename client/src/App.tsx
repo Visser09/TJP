@@ -11,6 +11,7 @@ import Analytics from "@/pages/analytics";
 import AICoach from "@/pages/ai-coach";
 import Journal from "@/pages/journal";
 import Settings from "@/pages/settings";
+import AutoImport from "@/pages/auto-import";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -28,6 +29,7 @@ function Router() {
           <Route path="/ai-coach" component={AICoach} />
           <Route path="/journal" component={Journal} />
           <Route path="/settings" component={Settings} />
+          <Route path="/auto-import" component={AutoImport} />
         </>
       )}
       <Route component={NotFound} />

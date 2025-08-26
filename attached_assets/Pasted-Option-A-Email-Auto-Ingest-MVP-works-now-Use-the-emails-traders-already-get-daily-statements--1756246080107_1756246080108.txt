@@ -1,0 +1,557 @@
+Option A — Email Auto-Ingest (MVP, works now)
+
+Use the emails traders already get (daily statements from Apex/TopStep/TPT and TradingView alert emails with chart images) and auto-pipe them into your journal.
+
+How it works
+
+Each user gets a unique forwarding address, e.g. mitchel+abc123@yourdomain.com.
+
+They set email forwarding rules once:
+
+Forward prop firm daily statements (CSV/PDF/HTML emails).
+
+Forward TradingView alerts (enable “send email”, include snapshot).
+
+Your backend receives those emails, parses attachments/body, and writes trades/balance snapshots to the DB—same schema as your CSV importer.
+
+What we ingest
+
+Prop firm statement emails → parse attached CSV or table:
+
+Fills (symbol, side, qty, entry/exit, fees, PnL)
+
+Balance & trailing DD (if included) → store in daily_metrics.stats
+
+TradingView alert emails (entry/exit) → create journal entries for that day:
+
+Save screenshot from the email (inline image or link) to storage; attach to the day’s journal.
+
+Store the alert metadata (symbol, side, price, time) as a quick “pseudo-fill” and later reconcile with prop statement.
+
+What you need to add
+
+Inbound email webhook (e.g., Mailgun/SendGrid/Postal):
+
+Route: POST /api/ingest/email
+
+Verify signature, read to address to find userId and accountTag.
+
+If attachment is CSV → feed your existing /api/import/csv logic programmatically.
+
+If HTML email (TV, some props) → parse table/text; if image present, store it and create a journal entry for that date with the image URL.
+
+Settings UI → “Email Auto-Import”
+
+Show the user’s forwarding address + one-click Gmail filter template text.
+
+Toggle: “Auto-attach TradingView screenshots to journal”.
+
+Nightly automation
+
+Cron at 02:30 ET:
+
+Ensure all emails from the day were processed.
+
+Recompute daily_metrics for impacted dates.
+
+If we only got TradingView alerts (no prop statement yet), mark the day as “pending final reconcile”.
+
+Why this wins
+
+Zero extra effort after initial setup.
+
+TV screenshots auto-land in the journal (your request).
+
+Works with any prop firm that emails statements.
+
+Option B — TradingView Webhooks (real-time fill intent)
+
+Use TV alerts to push near-real-time trade intents; reconcile at night with Email/CSV.
+
+Alert payload → POST /api/ingest/tradingview
+
+{
+  "accountTag": "APEX-PA-1",
+  "symbol": "{{ticker}}",
+  "side": "{{strategy.order.action}}",
+  "qty": "{{strategy.order.contracts}}",
+  "price": "{{close}}",
+  "time": "{{timenow}}",
+  "orderId": "{{strategy.order.id}}"
+}
+
+
+Immediate UX: Calendar shows trades today; AI can comment intraday.
+
+Nightly: statement email “true-ups” balances/fees and final PnL (broker of record).
+
+Option C — Browser Extension (phase 2)
+
+For props that don’t email good statements, a tiny extension can scrape the user’s dashboard page while logged in and push fills/balances to your API.
+
+Fully automatic; no files; works across many props.
+
+Build later—start with Email + Webhooks for speed and reliability.
+
+Replit Build Brief — Automation Add-Ons
+New endpoints
+POST /api/ingest/email          # receives parsed email webhooks (Mailgun/SendGrid)
+POST /api/ingest/tradingview    # webhook for TV alerts
+POST /api/import/csv            # already built (used internally by email parser too)
+
+Data flow
+
+/api/ingest/email
+
+Identify userId from alias (+abc123), or via a signed token in the “to” address.
+
+If CSV attachment → stream to the same parser as manual import (dedupe by hash/broker id).
+
+If HTML with table → parse rows to trades; if balance/DD present, write to daily_metrics.stats.
+
+If image (TradingView), save to storage (e.g., S3/Replit storage) and create journal_entries for that date (link image + alert text).
+
+/api/ingest/tradingview
+
+Validate a pre-shared secret header.
+
+Upsert a trade intent (lightweight trade record with source='tv').
+
+Mark the day “awaiting final reconcile”.
+
+Nightly cron
+
+For each impacted day/account: aggregate trades, apply fees, update daily_metrics (net/gross, win/loss).
+
+If both TV intents and email statement exist, prefer statement numbers for PnL/balance.
+
+DB tweaks
+
+journal_entries.attachments: allow array of {type:'image'|'link'|'file', url, meta}.
+
+trades.source: enum 'csv'|'email'|'tv'|'api'.
+
+daily_metrics.stats: allow {balance, trail, broker_pnl, tv_intent_pnl} to show reconciliation.
+
+Settings UI
+
+Forwarding address display + “Copy” button.
+
+Help text: “Forward your Apex/TopStep daily statements and TradingView alert emails here to auto-import.”
+
+Toggle: “Auto-attach TradingView screenshots to journal.”
+
+Acceptance tests
+
+Forward a prop CSV email → trades appear; calendar PnL matches; dashboard updates.
+
+Forward a TV alert with snapshot → journal shows the image under the correct date; trade intent appears; at night, statement reconciles.
+
+Missed day? Manually upload CSV—dedupe prevents double counting.
+
+Minimal server stubs (to drop in)
+1) /api/ingest/email (FastAPI pseudo)
+@router.post("/api/ingest/email")
+async def ingest_email(payload: EmailWebhook):
+    # 1) Auth verify signature from provider
+    user = resolve_user_from_to_address(payload.to)  # mitchel+abc123@
+    if payload.attachments_csv:
+        for f in payload.attachments_csv:
+            await import_csv_stream(user.id, account_id_from_subject(payload), f.stream)
+    if payload.images:
+        for img in payload.images:
+            url = store_image(img)
+            create_journal_entry(user.id, account_id_from_subject(payload),
+                                 date=payload.sent_at.date(),
+                                 title="TradingView Snapshot",
+                                 body=payload.subject,
+                                 attachments=[{"type":"image","url":url}])
+    if payload.html_body_contains_table:
+        rows = parse_statement_table(payload.html)
+        upsert_trades_and_metrics(user.id, rows)
+    return {"ok": True}
+
+2) /api/ingest/tradingview
+@router.post("/api/ingest/tradingview")
+async def ingest_tv(req: Request):
+    assert req.headers.get("X-Webhook-Secret") == os.getenv("TV_SECRET")
+    data = await req.json()
+    account = find_account(user_id_from_token(data), data["accountTag"])
+    upsert_trade_intent(user_id, account.id, data)  # source='tv'
+    touch_daily_metrics(user_id, account.id, parse_dt(data["time"]).date(), pending=True)
+    return {"ok": True}
+
+Why this nails your goals
+
+Automatic: after 2-minute setup, data flows nightly without users doing anything.
+
+Realtime feel: TV webhooks make the journal feel live; the nightly email locks accuracy.
+
+Strategy-first journaling: TV screenshots + mood/notes land right in the journal modal for each day (as you wanted).
+
+Apple-simple UX: one forwarding address + one on/off toggle; everything else “just works”.
+
+If you want, I can create the Settings panel UI and the journal auto-attach logic next so you can paste it straight into your codebase.
+
+You said:
+perfect can you write this all so riplit can implment it! we need it to be easy for poeople to setup also! 
+ChatGPT said:
+
+Absolutely—here’s a paste-ready build brief for Replit/Ghostwriter that implements the automatic data ingestion plan (Email Auto-Import + TradingView Webhooks), keeps CSV import as a baseline, and makes setup super simple for users. I’ve wired it to your existing pages/components so everything slots in cleanly.
+
+🚚 Auto-Ingestion Build Brief (Prop-Firm Journal)
+Outcome
+
+Users set up once (forwarding & optional webhooks); after that, their data flows nightly.
+
+TradingView screenshots and alert info auto-attach to their journal; final PnL/balances are reconciled from prop statement emails/CSVs.
+
+CSV manual import still works, and real Tradovate retail API stays supported for those who have it.
+
+0) Env & Secrets (Replit → Secrets)
+APP_BASE_URL=https://<your-domain>
+DATABASE_URL=postgresql://user:pass@host/dbname
+JWT_SECRET=change_me
+
+# Email provider (choose one; example uses Mailgun)
+MAIL_PROVIDER=mailgun
+MAILGUN_SIGNING_KEY=key-xxxxxxxxxxxxxxxx
+INGEST_INBOUND_EMAIL_PATH=/api/ingest/email  # route for provider webhook
+
+# Inbound email alias domain used for user addresses like user+<token>@ingest.yourdomain.com
+INGEST_EMAIL_DOMAIN=ingest.yourdomain.com
+
+# Storage for images (TradingView screenshots)
+STORAGE_BUCKET=journal-uploads
+STORAGE_BASE_URL=https://cdn.yourdomain.com/journal
+
+# TradingView webhook
+TV_SECRET=superlongrandomsecret
+
+# (Optional) Tradovate retail OAuth for users who have API access
+TRADOVATE_CLIENT_ID=xxxx
+TRADOVATE_CLIENT_SECRET=xxxx
+TRADOVATE_REDIRECT_URI=https://<your-domain>/api/tradovate/oauth/callback
+
+1) DB Tweaks (Postgres)
+
+Add/confirm small fields only—no large refactor.
+
+-- trades: add a 'source' and optional external id for dedupe
+ALTER TABLE trades
+  ADD COLUMN IF NOT EXISTS source TEXT,          -- 'csv'|'email'|'tv'|'api'
+  ADD COLUMN IF NOT EXISTS external_id TEXT,     -- orderId/fill id/hash
+  ADD UNIQUE (user_id, trading_account_id, external_id);
+
+-- journal_entries: allow images/links
+ALTER TABLE journal_entries
+  ADD COLUMN IF NOT EXISTS attachments JSONB DEFAULT '[]';
+
+-- daily_metrics: allow reconcile info
+ALTER TABLE daily_metrics
+  ADD COLUMN IF NOT EXISTS stats JSONB DEFAULT '{}'::jsonb;
+
+
+These flow into your existing Dashboard, Recent Trades, Calendar, and AI Insights automatically once populated.
+
+2) User Experience (Apple-simple)
+A) Settings → Auto-Import
+
+Shows a unique forwarding email (copy button) and step-by-step help:
+
+“Forward your prop firm daily statement emails here.”
+
+“(Optional) Forward TradingView alert emails with snapshots here.”
+
+Toggle: “Auto-attach TradingView screenshots to my journal”.
+
+B) Dashboard → Quick Actions
+
+Add “Import CSV” button (opens ImportCsvModal) next to “Sync Tradovate”.
+
+C) TradingView Webhook (Optional, Real-time)
+
+Shows a Webhook URL and a Secret (TV_SECRET) + example JSON payload to paste into alert.
+
+3) API Routes
+3.1 Inbound Email Webhook
+POST /api/ingest/email
+Auth: provider signature (e.g., Mailgun/SendGrid)
+Body: provider JSON (attachments, from, to, subject, html, text, headers)
+
+
+Behavior
+
+Resolve userId from the alias part of the “to” address (e.g., u_abc123@ingest.yourdomain.com → lookup token abc123 in users table).
+
+If CSV attachment: call the existing CSV import path programmatically (same mapping/dedupe).
+
+If HTML body contains statement table: parse rows → upsert trades/balances.
+
+If email has images (TV snapshots): store and create a journal_entries row for that day with the image attached.
+
+3.2 TradingView Webhook
+POST /api/ingest/tradingview
+Headers: X-Webhook-Secret: <TV_SECRET>
+Body (JSON):
+{
+  "userToken": "abc123",          // mapped to userId serverside
+  "accountTag": "APEX-PA-1",
+  "symbol": "{{ticker}}",
+  "side": "{{strategy.order.action}}",  // BUY/SELL or LONG/SHORT
+  "qty": "{{strategy.order.contracts}}",
+  "price": "{{close}}",
+  "time": "{{timenow}}",
+  "orderId": "{{strategy.order.id}}",
+  "screenshotUrl": "{{image}}?"   // if your alert template supports one; else null
+}
+
+
+Behavior
+
+Verify header; map userToken to userId; resolve trading_account_id by accountTag.
+
+Upsert a trade intent with source='tv' and external_id=orderId.
+
+If screenshotUrl present (or uploaded later via email), add a journal entry for that date.
+
+3.3 CSV Import (already specced)
+
+Keep /api/import/csv (FormData) for manual uploads and for the email webhook internally to call.
+
+4) Nightly Reconcile Job (02:30 ET)
+
+For days touched in the last 48h:
+
+Aggregate trades per account/day, combine TV intents with email/CSV statements.
+
+If both exist, prefer statement numbers for net PnL/balance.
+
+Update daily_metrics.stats with:
+
+{"balance": 51235.10, "trail": 49820.00, "broker_pnl": 120.50, "tv_intent_pnl": 125.70}
+
+Mark day reconciled once statement data is present.
+
+5) Minimal Server Stubs (FastAPI-style)
+# api/ingest_email.py
+from fastapi import APIRouter, Request, HTTPException
+import os, hashlib, io, csv
+from .helpers import (verify_mailgun_signature, resolve_user_from_to,
+                      store_image, upsert_trade_row, upsert_daily_metrics,
+                      find_or_create_account_by_tag, parse_statement_html)
+
+router = APIRouter()
+
+@router.post("/api/ingest/email")
+async def ingest_email(request: Request):
+    payload = await request.form()  # Mailgun posts multipart/form-data
+    if os.getenv("MAIL_PROVIDER") == "mailgun":
+        if not verify_mailgun_signature(payload):
+            raise HTTPException(status_code=403, detail="bad signature")
+
+    to_addr = payload.get("recipient") or payload.get("To")
+    user = resolve_user_from_to(to_addr)  # parse alias token
+    if not user:
+        raise HTTPException(404, "user not found")
+
+    # 1) attachments (CSV)
+    inserted = 0
+    updated = 0
+    for i in range(int(payload.get("attachment-count", 0))):
+        f = payload.get(f"attachment-{i+1}")
+        if f and str(f.filename).lower().endswith(".csv"):
+            content = await f.read()
+            inserted_i, updated_i = await import_csv_stream(user.id, content)
+            inserted += inserted_i; updated += updated_i
+
+    # 2) HTML body → possible statement table
+    html = payload.get("body-html")
+    if html:
+        rows = parse_statement_html(html)  # returns normalized trade rows + balance/trail snapshot
+        for row in rows.trades:
+            upsert_trade_row(user.id, row["account_id"], row)
+        if rows.snapshot:
+            upsert_daily_metrics(user.id, rows.snapshot["account_id"], rows.snapshot["date"],
+                                 balance=rows.snapshot["balance"],
+                                 trail=rows.snapshot.get("trail"))
+
+    # 3) images → journal entry
+    images = []
+    for i in range(int(payload.get("attachment-count", 0))):
+        f = payload.get(f"attachment-{i+1}")
+        if f and f.content_type.startswith("image/"):
+            url = store_image(f)  # returns public URL
+            images.append(url)
+    if images:
+        create_journal_entry(user.id,
+                             account_id=None,
+                             date=(payload.get("Date") or payload.get("timestamp")),
+                             title="TradingView Snapshot",
+                             body=(payload.get("subject") or "Snapshot"),
+                             attachments=[{"type":"image","url":u} for u in images])
+
+    return {"ok": True, "inserted": inserted, "updated": updated}
+
+# api/ingest_tv.py
+from fastapi import APIRouter, Request, HTTPException
+import os, json
+from .helpers import (user_from_token, account_by_tag, upsert_trade_intent,
+                      create_journal_entry)
+
+router = APIRouter()
+
+@router.post("/api/ingest/tradingview")
+async def ingest_tv(request: Request):
+    if request.headers.get("X-Webhook-Secret") != os.getenv("TV_SECRET"):
+        raise HTTPException(403, "bad secret")
+
+    data = await request.json()
+    user = user_from_token(data.get("userToken"))
+    if not user:
+        raise HTTPException(404, "user not found")
+    account = account_by_tag(user.id, data["accountTag"])
+    if not account:
+        # optional: auto-create account from tag (Eval/PA inference)
+        account = create_account_from_tag(user.id, data["accountTag"])
+
+    upsert_trade_intent(
+        user_id=user.id,
+        account_id=account.id,
+        external_id=data.get("orderId"),
+        symbol=data["symbol"],
+        side=data["side"],
+        qty=data["qty"],
+        price=data["price"],
+        when=data["time"]
+    )
+
+    if data.get("screenshotUrl"):
+        create_journal_entry(
+            user_id=user.id, account_id=account.id, date=data["time"],
+            title=f"TV Alert {data['symbol']} {data['side']}",
+            body="TradingView alert",
+            attachments=[{"type":"image","url":data["screenshotUrl"]}]
+        )
+
+    return {"ok": True}
+
+# reuse your /api/import/csv – add a callable version for email
+async def import_csv_stream(user_id: str, content: bytes):
+    reader = csv.DictReader(io.StringIO(content.decode("utf-8")))
+    inserted, updated = 0, 0
+    for r in reader:
+        # normalize fields (Apex/TopStep/TPT mappings—start with Apex headers)
+        row = normalize_csv_row(r)  # returns dict with symbol/side/qty/entry/exit/fees/pnl/account_id,date
+        did_insert = upsert_trade_row(user_id, row["account_id"], row)
+        inserted += 1 if did_insert else 0
+        updated += 0 if did_insert else 1
+    # recompute metrics per day
+    for day in touched_days_from_rows(...):
+        upsert_daily_metrics(user_id, row["account_id"], day)
+    return inserted, updated
+
+6) Settings UI (paste-ready skeleton)
+// components/settings/AutoImportPanel.tsx
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+
+export function AutoImportPanel({ userId }: { userId: string }) {
+  const [forwardAddr, setForwardAddr] = useState<string>("")
+  const [webhookUrl, setWebhookUrl] = useState<string>("")
+  const [tvSecret, setTvSecret] = useState<string>("")
+
+  useEffect(() => {
+    (async () => {
+      const r = await fetch(`/api/settings/ingest?userId=${userId}`)
+      const j = await r.json()
+      setForwardAddr(j.forwardingAddress)
+      setWebhookUrl(j.tvWebhookUrl)
+      setTvSecret(j.tvSecretMasked)
+    })()
+  }, [userId])
+
+  return (
+    <Card className="bg-dark-surface bubble-shadow">
+      <CardHeader>
+        <CardTitle className="text-white text-xl">Auto-Import</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <section>
+          <h4 className="text-white font-medium mb-2">Email Forwarding</h4>
+          <p className="text-text-secondary text-sm mb-3">
+            Forward your prop-firm daily statements (and optional TradingView alert emails) to this address:
+          </p>
+          <div className="flex items-center gap-2">
+            <code className="px-3 py-2 rounded bg-black/30 text-apple-blue">{forwardAddr}</code>
+            <Button onClick={() => navigator.clipboard.writeText(forwardAddr)}>Copy</Button>
+          </div>
+          <ol className="list-decimal list-inside text-text-secondary text-sm mt-3 space-y-1">
+            <li>Create a mail filter in Gmail/Outlook for your prop firm’s statement emails.</li>
+            <li>Auto-forward to the address above.</li>
+            <li>We’ll parse attachments/tables nightly and update your journal.</li>
+          </ol>
+        </section>
+
+        <section>
+          <h4 className="text-white font-medium mb-2">TradingView Webhook (optional)</h4>
+          <p className="text-text-secondary text-sm mb-3">
+            Add a webhook to your TradingView alerts for real-time journaling. We’ll reconcile PnL with statements at night.
+          </p>
+          <div className="flex items-center gap-2">
+            <code className="px-3 py-2 rounded bg-black/30 text-apple-blue">{webhookUrl}</code>
+            <Button onClick={() => navigator.clipboard.writeText(webhookUrl)}>Copy</Button>
+          </div>
+          <p className="text-text-secondary text-xs mt-2">Header <code>X-Webhook-Secret</code>: <code>{tvSecret}</code></p>
+          <p className="text-text-secondary text-xs mt-2">Example JSON payload:</p>
+          <pre className="text-xs bg-black/40 rounded p-3 overflow-auto">
+{`{
+  "userToken": "<shown in your profile>",
+  "accountTag": "APEX-PA-1",
+  "symbol": "{{ticker}}",
+  "side": "{{strategy.order.action}}",
+  "qty": "{{strategy.order.contracts}}",
+  "price": "{{close}}",
+  "time": "{{timenow}}",
+  "orderId": "{{strategy.order.id}}"
+}`}
+          </pre>
+        </section>
+      </CardContent>
+    </Card>
+  )
+}
+
+
+Add this panel on a Settings page and route from your sidebar (Settings icon already present).
+
+7) CSV Import Modal (hook to Quick Actions)
+
+Use your existing Dashboard Quick Actions area; add an “Import CSV” button to open ImportCsvModal.
+
+8) Deployment & Tests
+
+Deploy
+
+Set secrets (Section 0).
+
+Configure inbound email route in provider (Mailgun → Routes: forward *@ingest.yourdomain.com to POST https://<your-domain>/api/ingest/email).
+
+Point STORAGE_BASE_URL to your file CDN (or use Replit storage for POC).
+
+Acceptance
+
+Forward a prop CSV email → data appears in Recent Trades and Dashboard; Calendar shows trades and day PnL.
+
+Send a TradingView webhook (curl) → trade intent appears today; add a screenshot via email → Journal shows image on today’s entry.
+
+Nightly job reconciles statement vs webhook; daily_metrics.stats shows final balance/trail.
+
+9) Copy for Users (micro-text in UI)
+
+Auto-Import (Email): “Forward your prop-firm daily statements here. We’ll do the rest.”
+
+TradingView Webhook: “Send your strategy alerts here for real-time journaling; we reconcile PnL nightly.”
+
+CSV Import: “Prefer files? Drop a CSV anytime—no duplicates.”

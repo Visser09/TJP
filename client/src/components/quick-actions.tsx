@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Plus, RefreshCw, Calendar, Brain, Upload } from "lucide-react";
+import { Plus, RefreshCw, Calendar, Brain, Upload, Mail } from "lucide-react";
 import { ImportCsvModal } from "@/components/import-csv-modal";
+import { useLocation } from 'wouter';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +24,12 @@ const actions = [
     icon: RefreshCw,
     color: "text-green-400",
     testId: "button-sync-tradovate",
+  },
+  {
+    name: "Auto-Import",
+    icon: Mail,
+    color: "text-cyan-400",
+    testId: "button-auto-import",
   },
   {
     name: "Calendar View",
@@ -55,6 +62,7 @@ export default function QuickActions({ currentAccount, onSyncTrades }: QuickActi
   const [isImportCsvOpen, setIsImportCsvOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
 
   const addTradeMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -99,11 +107,9 @@ export default function QuickActions({ currentAccount, onSyncTrades }: QuickActi
   const actionHandlers = {
     "Add Trade": () => setIsAddTradeOpen(true),
     "Sync Tradovate": () => onSyncTrades?.(),
-    "Calendar View": () => {
-      const calendarElement = document.querySelector('[data-testid="trading-calendar"]');
-      calendarElement?.scrollIntoView({ behavior: 'smooth' });
-    },
-    "AI Coach": () => setIsAiCoachOpen(true),
+    "Auto-Import": () => navigate('/auto-import'),
+    "Calendar View": () => navigate('/calendar'),
+    "AI Coach": () => navigate('/ai-coach'),
     "Import CSV": () => setIsImportCsvOpen(true),
   };
 

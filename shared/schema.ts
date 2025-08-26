@@ -84,6 +84,8 @@ export const trades = pgTable("trades", {
   brokerExecutionId: varchar("broker_execution_id"),
   rowHash: varchar("row_hash"),
   importSource: varchar("import_source"),
+  source: varchar("source").default("manual"), // 'csv', 'email', 'tv', 'api', 'manual'
+  externalId: varchar("external_id"), // orderId/fillId/hash for deduplication
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
   tradesUserAccountIdx: index("trades_user_account_idx").on(table.userId, table.tradingAccountId),
@@ -152,6 +154,15 @@ export const csvMappingProfiles = pgTable("csv_mapping_profiles", {
   name: varchar("name").notNull(),
   source: varchar("source").notNull(), // 'apex', 'topstep', 'tpt', 'custom'
   mapping: jsonb("mapping").notNull(), // column mappings
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// User ingest tokens for email forwarding
+export const userIngestTokens = pgTable("user_ingest_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  token: varchar("token").notNull().unique(),
+  isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -267,6 +278,11 @@ export const insertCsvMappingProfileSchema = createInsertSchema(csvMappingProfil
   createdAt: true,
 });
 
+export const insertUserIngestTokenSchema = createInsertSchema(userIngestTokens).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type UpsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -284,3 +300,5 @@ export type InsertAiInsight = z.infer<typeof insertAiInsightSchema>;
 export type AiInsight = typeof aiInsights.$inferSelect;
 export type InsertCsvMappingProfile = z.infer<typeof insertCsvMappingProfileSchema>;
 export type CsvMappingProfile = typeof csvMappingProfiles.$inferSelect;
+export type InsertUserIngestToken = z.infer<typeof insertUserIngestTokenSchema>;
+export type UserIngestToken = typeof userIngestTokens.$inferSelect;

@@ -2,6 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import { handleEmailIngest, emailIngestMiddleware, generateIngestToken } from "./emailIngest";
+import { handleTradingViewWebhook, getTradingViewWebhookConfig } from "./tradingviewWebhook";
 import { 
   insertTradingAccountSchema,
   insertTradeSchema,
@@ -456,6 +458,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('CSV import error:', error);
       res.status(500).json({ message: 'Failed to import CSV' });
+    }
+  });
+
+  // Email ingestion endpoints
+  app.post('/api/ingest/email', emailIngestMiddleware, handleEmailIngest);
+  
+  // TradingView webhook endpoints
+  app.post('/api/ingest/tradingview', handleTradingViewWebhook);
+  app.get('/api/settings/tradingview-webhook', isAuthenticated, getTradingViewWebhookConfig);
+  
+  // User ingest token endpoint
+  app.get('/api/settings/ingest-token', isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any)?.claims?.sub;
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      
+      const token = await generateIngestToken(userId);
+      const baseUrl = process.env.APP_BASE_URL || 'https://your-domain.replit.app';
+      const forwardingAddress = `user+${token}@ingest.yourdomain.com`;
+      
+      res.json({
+        token,
+        forwardingAddress,
+        instructions: [
+          "Forward your prop firm daily statement emails to this address",
+          "Forward TradingView alert emails with screenshots to this address",
+          "Data will be automatically imported into your journal"
+        ]
+      });
+    } catch (error) {
+      console.error('Error getting ingest token:', error);
+      res.status(500).json({ error: 'Failed to get ingest token' });
     }
   });
 
