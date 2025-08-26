@@ -19,22 +19,27 @@ export default function TradingCalendar() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [currentMonth] = useState(() => format(new Date(), "yyyy-MM"));
 
-  const { data: calendarData, isLoading } = useQuery({
+  const { data: calendarData, isLoading, error } = useQuery({
     queryKey: ["/api/analytics/daily", { month: currentMonth }],
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
+    retry: (failureCount, error) => {
+      if (isUnauthorizedError(error as Error)) {
+        return false;
       }
+      return failureCount < 3;
     },
   });
+
+  // Handle unauthorized error
+  if (error && isUnauthorizedError(error as Error)) {
+    toast({
+      title: "Unauthorized",
+      description: "You are logged out. Logging in again...",
+      variant: "destructive",
+    });
+    setTimeout(() => {
+      window.location.href = "/api/login";
+    }, 500);
+  }
 
   const { data: economicEvents } = useQuery({
     queryKey: ["/api/econ", { month: currentMonth }],
@@ -55,13 +60,13 @@ export default function TradingCalendar() {
 
   // Create lookup for calendar data
   const dayDataLookup = new Map<string, CalendarDay>();
-  calendarData?.days?.forEach((day: CalendarDay) => {
+  (calendarData as any)?.days?.forEach((day: CalendarDay) => {
     dayDataLookup.set(day.date, day);
   });
 
   // Create lookup for economic events
   const eventsLookup = new Map<string, any[]>();
-  economicEvents?.forEach((event: any) => {
+  (economicEvents as any)?.forEach?.((event: any) => {
     const dateKey = event.date;
     if (!eventsLookup.has(dateKey)) {
       eventsLookup.set(dateKey, []);

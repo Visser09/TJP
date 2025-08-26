@@ -6,27 +6,32 @@ import { useToast } from "@/hooks/use-toast";
 export default function MetricsGrid() {
   const { toast } = useToast();
 
-  const { data: performance, isLoading } = useQuery({
+  const { data: performance, isLoading, error } = useQuery({
     queryKey: ["/api/analytics/performance"],
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
+    retry: (failureCount, error) => {
+      if (isUnauthorizedError(error as Error)) {
+        return false;
       }
+      return failureCount < 3;
     },
   });
+
+  // Handle unauthorized error
+  if (error && isUnauthorizedError(error as Error)) {
+    toast({
+      title: "Unauthorized",
+      description: "You are logged out. Logging in again...",
+      variant: "destructive",
+    });
+    setTimeout(() => {
+      window.location.href = "/api/login";
+    }, 500);
+  }
 
   const metrics = [
     {
       title: "Daily P&L",
-      value: performance?.totalPnl ? `$${performance.totalPnl.toLocaleString()}` : "$0",
+      value: (performance as any)?.totalPnl ? `$${(performance as any).totalPnl.toLocaleString()}` : "$0",
       change: "+14.2% today",
       icon: TrendingUp,
       color: "text-green-400",
@@ -34,7 +39,7 @@ export default function MetricsGrid() {
     },
     {
       title: "Win Rate",
-      value: performance?.winRate ? `${performance.winRate.toFixed(1)}%` : "0%",
+      value: (performance as any)?.winRate ? `${(performance as any).winRate.toFixed(1)}%` : "0%",
       change: "↑ 2.1% this week",
       icon: Target,
       color: "text-blue-400",

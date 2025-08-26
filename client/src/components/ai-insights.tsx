@@ -8,29 +8,34 @@ import { useToast } from "@/hooks/use-toast";
 export default function AiInsights() {
   const { toast } = useToast();
 
-  const { data: insights, isLoading } = useQuery({
+  const { data: insights, isLoading, error } = useQuery({
     queryKey: ["/api/ai-insights"],
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
+    retry: (failureCount, error) => {
+      if (isUnauthorizedError(error as Error)) {
+        return false;
       }
+      return failureCount < 3;
     },
   });
+
+  // Handle unauthorized error
+  if (error && isUnauthorizedError(error as Error)) {
+    toast({
+      title: "Unauthorized",
+      description: "You are logged out. Logging in again...",
+      variant: "destructive",
+    });
+    setTimeout(() => {
+      window.location.href = "/api/login";
+    }, 500);
+  }
 
   const generateInsightsMutation = useMutation({
     mutationFn: async () => {
       await apiRequest("POST", "/api/ai-insights/generate", {});
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(["/api/ai-insights"]);
+      queryClient.invalidateQueries({ queryKey: ["/api/ai-insights"] });
       toast({
         title: "Success",
         description: "New AI insights generated successfully",
@@ -114,8 +119,8 @@ export default function AiInsights() {
               <div className="h-3 bg-gray-700 rounded w-full"></div>
             </div>
           ))
-        ) : insights && insights.length > 0 ? (
-          insights.map((insight: any) => {
+        ) : insights && (insights as any).length > 0 ? (
+          (insights as any).map((insight: any) => {
             const Icon = getInsightIcon(insight.type);
             const color = getInsightColor(insight.type);
             const borderStyle = getInsightBorder(insight.type);

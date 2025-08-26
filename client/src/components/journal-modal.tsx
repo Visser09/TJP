@@ -25,8 +25,8 @@ export default function JournalModal({ date, onClose }: JournalModalProps) {
       await apiRequest("POST", "/api/journal", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(["/api/analytics/daily"]);
-      queryClient.invalidateQueries(["/api/journal"]);
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/daily"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/journal"] });
       toast({
         title: "Success",
         description: "Journal entry saved successfully",

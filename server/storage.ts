@@ -69,7 +69,7 @@ export class DatabaseStorage implements IStorage {
       .insert(users)
       .values(userData)
       .onConflictDoUpdate({
-        target: users.id,
+        target: users.email,
         set: {
           ...userData,
           updatedAt: new Date(),
@@ -107,24 +107,24 @@ export class DatabaseStorage implements IStorage {
 
   // Trade operations
   async getTrades(userId: string, accountId?: string, from?: string, to?: string, limit = 100): Promise<Trade[]> {
-    let query = db
-      .select()
-      .from(trades)
-      .where(eq(trades.userId, userId));
+    let conditions = [eq(trades.userId, userId)];
 
     if (accountId) {
-      query = query.where(and(eq(trades.userId, userId), eq(trades.tradingAccountId, accountId)));
+      conditions.push(eq(trades.tradingAccountId, accountId));
     }
 
     if (from) {
-      query = query.where(and(query.where, gte(trades.entryTime, new Date(from))));
+      conditions.push(gte(trades.entryTime, new Date(from)));
     }
 
     if (to) {
-      query = query.where(and(query.where, lte(trades.entryTime, new Date(to))));
+      conditions.push(lte(trades.entryTime, new Date(to)));
     }
 
-    return await query
+    return await db
+      .select()
+      .from(trades)
+      .where(and(...conditions))
       .orderBy(desc(trades.entryTime))
       .limit(limit);
   }
@@ -138,16 +138,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getRecentTrades(userId: string, accountId?: string, limit = 5): Promise<Trade[]> {
-    let query = db
-      .select()
-      .from(trades)
-      .where(eq(trades.userId, userId));
+    let conditions = [eq(trades.userId, userId)];
 
     if (accountId) {
-      query = query.where(and(eq(trades.userId, userId), eq(trades.tradingAccountId, accountId)));
+      conditions.push(eq(trades.tradingAccountId, accountId));
     }
 
-    return await query
+    return await db
+      .select()
+      .from(trades)
+      .where(and(...conditions))
       .orderBy(desc(trades.entryTime))
       .limit(limit);
   }
@@ -189,28 +189,24 @@ export class DatabaseStorage implements IStorage {
 
   // Daily metrics operations
   async getDailyMetrics(userId: string, accountId?: string, month?: string): Promise<DailyMetrics[]> {
-    let query = db
-      .select()
-      .from(dailyMetrics)
-      .where(eq(dailyMetrics.userId, userId));
+    let conditions = [eq(dailyMetrics.userId, userId)];
 
     if (accountId) {
-      query = query.where(and(eq(dailyMetrics.userId, userId), eq(dailyMetrics.tradingAccountId, accountId)));
+      conditions.push(eq(dailyMetrics.tradingAccountId, accountId));
     }
 
     if (month) {
       const startDate = `${month}-01`;
       const endDate = `${month}-31`;
-      query = query.where(
-        and(
-          query.where,
-          gte(dailyMetrics.tradeDate, startDate),
-          lte(dailyMetrics.tradeDate, endDate)
-        )
-      );
+      conditions.push(gte(dailyMetrics.tradeDate, startDate));
+      conditions.push(lte(dailyMetrics.tradeDate, endDate));
     }
 
-    return await query.orderBy(dailyMetrics.tradeDate);
+    return await db
+      .select()
+      .from(dailyMetrics)
+      .where(and(...conditions))
+      .orderBy(dailyMetrics.tradeDate);
   }
 
   async upsertDailyMetrics(metrics: InsertDailyMetrics): Promise<DailyMetrics> {

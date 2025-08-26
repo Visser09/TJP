@@ -6,22 +6,27 @@ import { useToast } from "@/hooks/use-toast";
 export default function RecentTrades() {
   const { toast } = useToast();
 
-  const { data: trades, isLoading } = useQuery({
+  const { data: trades, isLoading, error } = useQuery({
     queryKey: ["/api/trades/recent"],
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
+    retry: (failureCount, error) => {
+      if (isUnauthorizedError(error as Error)) {
+        return false;
       }
+      return failureCount < 3;
     },
   });
+
+  // Handle unauthorized error
+  if (error && isUnauthorizedError(error as Error)) {
+    toast({
+      title: "Unauthorized",
+      description: "You are logged out. Logging in again...",
+      variant: "destructive",
+    });
+    setTimeout(() => {
+      window.location.href = "/api/login";
+    }, 500);
+  }
 
   const formatPnL = (pnl: string | number) => {
     const value = parseFloat(pnl?.toString() || "0");
@@ -58,8 +63,8 @@ export default function RecentTrades() {
               </div>
             </div>
           ))
-        ) : trades && trades.length > 0 ? (
-          trades.map((trade: any) => {
+        ) : trades && (trades as any).length > 0 ? (
+          (trades as any).map((trade: any) => {
             const pnlValue = parseFloat(trade.pnl || "0");
             const isProfit = pnlValue >= 0;
             
