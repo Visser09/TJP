@@ -3,11 +3,15 @@ import { ArrowRight } from "lucide-react";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useToast } from "@/hooks/use-toast";
 
-export default function RecentTrades() {
+interface RecentTradesProps {
+  currentAccount: any;
+}
+
+export default function RecentTrades({ currentAccount }: RecentTradesProps) {
   const { toast } = useToast();
 
   const { data: trades, isLoading, error } = useQuery({
-    queryKey: ["/api/trades/recent"],
+    queryKey: ["/api/trades/recent", currentAccount?.id],
     retry: (failureCount, error) => {
       if (isUnauthorizedError(error as Error)) {
         return false;

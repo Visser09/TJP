@@ -14,13 +14,17 @@ interface CalendarDay {
   events: Array<{ id: string; title: string; importance: string }>;
 }
 
-export default function TradingCalendar() {
+interface TradingCalendarProps {
+  currentAccount: any;
+}
+
+export default function TradingCalendar({ currentAccount }: TradingCalendarProps) {
   const { toast } = useToast();
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [currentMonth] = useState(() => format(new Date(), "yyyy-MM"));
 
   const { data: calendarData, isLoading, error } = useQuery({
-    queryKey: ["/api/analytics/daily", { month: currentMonth }],
+    queryKey: ["/api/analytics/daily", currentAccount?.id, { month: currentMonth }],
     retry: (failureCount, error) => {
       if (isUnauthorizedError(error as Error)) {
         return false;

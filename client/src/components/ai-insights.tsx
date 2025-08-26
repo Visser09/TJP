@@ -5,11 +5,15 @@ import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useToast } from "@/hooks/use-toast";
 
-export default function AiInsights() {
+interface AiInsightsProps {
+  currentAccount: any;
+}
+
+export default function AiInsights({ currentAccount }: AiInsightsProps) {
   const { toast } = useToast();
 
   const { data: insights, isLoading, error } = useQuery({
-    queryKey: ["/api/ai-insights"],
+    queryKey: ["/api/ai-insights", currentAccount?.id],
     retry: (failureCount, error) => {
       if (isUnauthorizedError(error as Error)) {
         return false;
@@ -32,10 +36,12 @@ export default function AiInsights() {
 
   const generateInsightsMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("POST", "/api/ai-insights/generate", {});
+      await apiRequest("/api/ai-insights/generate", "POST", {
+        accountId: currentAccount?.id,
+      });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/ai-insights"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/ai-insights", currentAccount?.id] });
       toast({
         title: "Success",
         description: "New AI insights generated successfully",

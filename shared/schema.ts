@@ -40,8 +40,9 @@ export const users = pgTable("users", {
 });
 
 // Enums
-export const accountTypeEnum = pgEnum('account_type', ['eval', 'pa', 'other']);
-export const accountStatusEnum = pgEnum('account_status', ['active', 'disabled']);
+export const propFirmEnum = pgEnum('prop_firm', ['apex', 'topstep', 'takeprofit']);
+export const accountTypeEnum = pgEnum('account_type', ['eval', 'pa', 'live']);
+export const accountStatusEnum = pgEnum('account_status', ['active', 'disabled', 'passed', 'failed']);
 export const sideEnum = pgEnum('side', ['long', 'short']);
 export const importanceEnum = pgEnum('importance', ['low', 'medium', 'high']);
 export const insightTypeEnum = pgEnum('insight_type', ['performance', 'risk', 'pattern', 'suggestion']);
@@ -51,10 +52,15 @@ export const tradingAccounts = pgTable("trading_accounts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
   provider: varchar("provider").notNull().default('tradovate'),
+  propFirm: propFirmEnum("prop_firm").notNull(),
   extAccountId: varchar("ext_account_id"),
   nickname: varchar("nickname"),
-  accountType: accountTypeEnum("account_type").default('other'),
+  accountType: accountTypeEnum("account_type").notNull(),
   status: accountStatusEnum("status").default('active'),
+  balance: numeric("balance").default('0'),
+  maxDrawdown: numeric("max_drawdown"),
+  tradovateAccessToken: text("tradovate_access_token"),
+  tradovateRefreshToken: text("tradovate_refresh_token"),
   lastSyncAt: timestamp("last_sync_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });

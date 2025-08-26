@@ -11,6 +11,8 @@ import {
   insertAiInsightSchema 
 } from "@shared/schema";
 import { z } from "zod";
+import { generateTradingInsights } from './openai';
+import { tradovateAPI } from './tradovate';
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -237,8 +239,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.dbUserId || req.user.claims.sub;
       
       // Generate sample insights based on user data
-      const trades = await storage.getRecentTrades(userId, undefined, 100);
-      const insights = await generateInsights(userId, trades);
+      const { accountId } = req.body;
+      const trades = await storage.getRecentTrades(userId, accountId, 100);
+      const insights = await generateInsights(userId, trades, accountId);
       
       // Save insights to database
       for (const insight of insights) {
@@ -272,25 +275,117 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Tradovate integration (stub endpoints)
-  app.post('/api/tradovate/connect', isAuthenticated, async (req: any, res) => {
+  // Tradovate integration
+  app.post('/api/tradovate/auth', isAuthenticated, async (req: any, res) => {
     try {
-      // This would initiate OAuth flow with Tradovate
-      res.json({ message: "Tradovate connection initiated" });
+      const userId = req.user.dbUserId || req.user.claims.sub;
+      const { accountId, credentials } = req.body;
+      
+      const { accessToken, refreshToken } = await tradovateAPI.authenticate(credentials);
+      
+      // Update account with tokens
+      await storage.updateTradingAccount(accountId, {
+        tradovateAccessToken: accessToken,
+        tradovateRefreshToken: refreshToken,
+        lastSyncAt: new Date(),
+      });
+      
+      res.json({ message: "Successfully connected to Tradovate" });
     } catch (error) {
-      console.error("Error connecting to Tradovate:", error);
-      res.status(500).json({ message: "Failed to connect to Tradovate" });
+      console.error("Error authenticating with Tradovate:", error);
+      res.status(500).json({ message: "Failed to authenticate with Tradovate" });
     }
   });
 
   app.post('/api/tradovate/sync', isAuthenticated, async (req: any, res) => {
     try {
+      const userId = req.user.dbUserId || req.user.claims.sub;
       const { accountId } = req.body;
-      // This would sync trades from Tradovate API
-      res.json({ message: "Sync initiated", accountId });
+      
+      const account = await storage.getTradingAccount(accountId);
+      if (!account || account.userId !== userId) {
+        return res.status(404).json({ message: "Account not found" });
+      }
+
+      if (!account.tradovateAccessToken) {
+        return res.status(400).json({ message: "Account not connected to Tradovate" });
+      }
+
+      // Set tokens for API calls
+      tradovateAPI.accessToken = account.tradovateAccessToken;
+      tradovateAPI.refreshToken = account.tradovateRefreshToken;
+
+      // Get Tradovate account ID from external account mapping
+      const tradovateAccounts = await tradovateAPI.getAccounts();
+      const matchingAccount = tradovateAccounts.find(acc => 
+        acc.name.includes(account.propFirm) || acc.accountType === account.accountType
+      );
+
+      if (!matchingAccount) {
+        return res.status(404).json({ message: "No matching Tradovate account found" });
+      }
+
+      // Sync trades from Tradovate
+      const tradovateTrades = await tradovateAPI.syncAccountTrades(matchingAccount.id);
+      
+      let syncedCount = 0;
+      for (const tradovateeTrade of tradovateTrades) {
+        // Check if trade already exists
+        const existingTrade = await storage.getTradeByExternalId(userId, accountId, tradovateeTrade.id.toString());
+        
+        if (!existingTrade) {
+          await storage.createTrade({
+            userId,
+            tradingAccountId: accountId,
+            symbol: tradovateeTrade.symbol,
+            side: tradovateeTrade.side.toLowerCase() as 'long' | 'short',
+            qty: tradovateeTrade.quantity.toString(),
+            entryPrice: tradovateeTrade.price.toString(),
+            exitPrice: tradovateeTrade.price.toString(),
+            entryTime: new Date(tradovateeTrade.timestamp),
+            exitTime: new Date(tradovateeTrade.timestamp),
+            fees: tradovateeTrade.commission.toString(),
+            pnl: tradovateeTrade.pnl.toString(),
+            tags: JSON.stringify(['tradovate-sync']),
+          });
+          syncedCount++;
+        }
+      }
+
+      // Update last sync time
+      await storage.updateTradingAccount(accountId, {
+        lastSyncAt: new Date(),
+      });
+
+      res.json({ message: `Synced ${syncedCount} new trades from Tradovate`, syncedTrades: syncedCount });
     } catch (error) {
-      console.error("Error syncing Tradovate:", error);
+      console.error("Error syncing with Tradovate:", error);
       res.status(500).json({ message: "Failed to sync with Tradovate" });
+    }
+  });
+
+  app.get('/api/tradovate/accounts', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.dbUserId || req.user.claims.sub;
+      const { accountId } = req.query;
+      
+      const account = await storage.getTradingAccount(accountId as string);
+      if (!account || account.userId !== userId) {
+        return res.status(404).json({ message: "Account not found" });
+      }
+
+      if (!account.tradovateAccessToken) {
+        return res.status(400).json({ message: "Account not connected to Tradovate" });
+      }
+
+      tradovateAPI.accessToken = account.tradovateAccessToken;
+      tradovateAPI.refreshToken = account.tradovateRefreshToken;
+
+      const accounts = await tradovateAPI.getAccounts();
+      res.json(accounts);
+    } catch (error) {
+      console.error("Error fetching Tradovate accounts:", error);
+      res.status(500).json({ message: "Failed to fetch Tradovate accounts" });
     }
   });
 
@@ -307,38 +402,43 @@ function isMarketOpen(date: string): boolean {
   return dayOfWeek >= 1 && dayOfWeek <= 5;
 }
 
-async function generateInsights(userId: string, trades: any[]): Promise<any[]> {
-  // This would integrate with an AI service to generate insights
-  // For now, return sample insights based on trade data
-  const insights = [];
-  
-  if (trades.length > 0) {
-    const winRate = trades.filter(t => parseFloat(t.pnl || '0') > 0).length / trades.length;
+async function generateInsights(userId: string, trades: any[], accountId?: string): Promise<any[]> {
+  try {
+    const journalEntries = await storage.getJournalEntries(userId, undefined, accountId);
+    const aiInsights = await generateTradingInsights(trades, journalEntries);
     
-    if (winRate < 0.5) {
-      insights.push({
-        type: 'risk',
-        title: 'Risk Alert',
-        content: 'Your win rate has decreased. Consider reviewing your entry criteria and risk management.',
-      });
-    }
-    
-    if (winRate > 0.7) {
-      insights.push({
+    return [
+      {
         type: 'performance',
-        title: 'Performance Trend',
-        content: 'Your trading performance is strong. Your current strategy is working well.',
-      });
-    }
-    
-    insights.push({
-      type: 'suggestion',
-      title: 'Suggestion',
-      content: 'Consider keeping a more detailed journal of your trade setups to identify patterns.',
-    });
+        title: 'Performance Analysis',
+        content: aiInsights.performance,
+      },
+      {
+        type: 'risk',
+        title: 'Risk Assessment',
+        content: aiInsights.risk,
+      },
+      {
+        type: 'pattern',
+        title: 'Pattern Recognition',
+        content: aiInsights.patterns,
+      },
+      {
+        type: 'suggestion',
+        title: 'AI Suggestions',
+        content: aiInsights.suggestions,
+      },
+    ];
+  } catch (error) {
+    console.error('Error generating AI insights:', error);
+    return [
+      {
+        type: 'suggestion',
+        title: 'Trading Journal',
+        content: 'Continue trading and journaling to get personalized AI insights.',
+      },
+    ];
   }
-  
-  return insights;
 }
 
 async function processAiChat(userId: string, message: string): Promise<string> {

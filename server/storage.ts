@@ -31,6 +31,7 @@ export interface IStorage {
   
   // Trading account operations
   getTradingAccounts(userId: string): Promise<TradingAccount[]>;
+  getTradingAccount(accountId: string): Promise<TradingAccount | undefined>;
   createTradingAccount(account: InsertTradingAccount): Promise<TradingAccount>;
   updateTradingAccount(id: string, updates: Partial<InsertTradingAccount>): Promise<TradingAccount | undefined>;
   
@@ -38,9 +39,10 @@ export interface IStorage {
   getTrades(userId: string, accountId?: string, from?: string, to?: string, limit?: number): Promise<Trade[]>;
   createTrade(trade: InsertTrade): Promise<Trade>;
   getRecentTrades(userId: string, accountId?: string, limit?: number): Promise<Trade[]>;
+  getTradeByExternalId(userId: string, accountId: string, externalId: string): Promise<Trade | undefined>;
   
   // Journal operations
-  getJournalEntries(userId: string, month: string): Promise<JournalEntry[]>;
+  getJournalEntries(userId: string, month?: string, accountId?: string): Promise<JournalEntry[]>;
   createJournalEntry(entry: InsertJournalEntry): Promise<JournalEntry>;
   updateJournalEntry(id: string, updates: Partial<InsertJournalEntry>): Promise<JournalEntry | undefined>;
   
@@ -94,6 +96,14 @@ export class DatabaseStorage implements IStorage {
       .values(account)
       .returning();
     return newAccount;
+  }
+
+  async getTradingAccount(accountId: string): Promise<TradingAccount | undefined> {
+    const [account] = await db
+      .select()
+      .from(tradingAccounts)
+      .where(eq(tradingAccounts.id, accountId));
+    return account;
   }
 
   async updateTradingAccount(id: string, updates: Partial<InsertTradingAccount>): Promise<TradingAccount | undefined> {
@@ -152,21 +162,39 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
   }
 
+  async getTradeByExternalId(userId: string, accountId: string, externalId: string): Promise<Trade | undefined> {
+    const [trade] = await db
+      .select()
+      .from(trades)
+      .where(
+        and(
+          eq(trades.userId, userId),
+          eq(trades.tradingAccountId, accountId),
+          sql`${trades.tags}::jsonb ? ${externalId}`
+        )
+      );
+    return trade;
+  }
+
   // Journal operations
-  async getJournalEntries(userId: string, month: string): Promise<JournalEntry[]> {
-    const startDate = `${month}-01`;
-    const endDate = `${month}-31`;
+  async getJournalEntries(userId: string, month?: string, accountId?: string): Promise<JournalEntry[]> {
+    let conditions = [eq(journalEntries.userId, userId)];
+    
+    if (month) {
+      const startDate = `${month}-01`;
+      const endDate = `${month}-31`;
+      conditions.push(gte(journalEntries.entryDate, startDate));
+      conditions.push(lte(journalEntries.entryDate, endDate));
+    }
+    
+    if (accountId) {
+      conditions.push(eq(journalEntries.tradingAccountId, accountId));
+    }
     
     return await db
       .select()
       .from(journalEntries)
-      .where(
-        and(
-          eq(journalEntries.userId, userId),
-          gte(journalEntries.entryDate, startDate),
-          lte(journalEntries.entryDate, endDate)
-        )
-      )
+      .where(and(...conditions))
       .orderBy(journalEntries.entryDate);
   }
 

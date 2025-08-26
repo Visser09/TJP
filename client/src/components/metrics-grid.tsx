@@ -3,11 +3,15 @@ import { TrendingUp, Target, Wallet, Trophy } from "lucide-react";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useToast } from "@/hooks/use-toast";
 
-export default function MetricsGrid() {
+interface MetricsGridProps {
+  currentAccount: any;
+}
+
+export default function MetricsGrid({ currentAccount }: MetricsGridProps) {
   const { toast } = useToast();
 
   const { data: performance, isLoading, error } = useQuery({
-    queryKey: ["/api/analytics/performance"],
+    queryKey: ["/api/analytics/performance", currentAccount?.id],
     retry: (failureCount, error) => {
       if (isUnauthorizedError(error as Error)) {
         return false;
