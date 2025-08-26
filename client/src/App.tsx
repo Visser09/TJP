@@ -6,6 +6,11 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import Landing from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
+import Calendar from "@/pages/calendar";
+import Analytics from "@/pages/analytics";
+import AICoach from "@/pages/ai-coach";
+import Journal from "@/pages/journal";
+import Settings from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -18,6 +23,11 @@ function Router() {
       ) : (
         <>
           <Route path="/" component={Dashboard} />
+          <Route path="/calendar" component={Calendar} />
+          <Route path="/analytics" component={Analytics} />
+          <Route path="/ai-coach" component={AICoach} />
+          <Route path="/journal" component={Journal} />
+          <Route path="/settings" component={Settings} />
         </>
       )}
       <Route component={NotFound} />

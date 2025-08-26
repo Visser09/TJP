@@ -1,16 +1,19 @@
 import { Home, Calendar, BarChart3, Brain, Book, Settings, Moon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLocation } from "wouter";
 
 const navigation = [
-  { name: "Dashboard", icon: Home, current: true, testId: "nav-dashboard" },
-  { name: "Calendar", icon: Calendar, current: false, testId: "nav-calendar" },
-  { name: "Analytics", icon: BarChart3, current: false, testId: "nav-analytics" },
-  { name: "AI Coach", icon: Brain, current: false, testId: "nav-ai" },
-  { name: "Journal", icon: Book, current: false, testId: "nav-journal" },
-  { name: "Settings", icon: Settings, current: false, testId: "nav-settings" },
+  { name: "Dashboard", icon: Home, path: "/", testId: "nav-dashboard" },
+  { name: "Calendar", icon: Calendar, path: "/calendar", testId: "nav-calendar" },
+  { name: "Analytics", icon: BarChart3, path: "/analytics", testId: "nav-analytics" },
+  { name: "AI Coach", icon: Brain, path: "/ai-coach", testId: "nav-ai" },
+  { name: "Journal", icon: Book, path: "/journal", testId: "nav-journal" },
+  { name: "Settings", icon: Settings, path: "/settings", testId: "nav-settings" },
 ];
 
 export default function Sidebar() {
+  const [location, setLocation] = useLocation();
+  
   return (
     <div className="w-20 bg-gray-900/50 backdrop-blur-xl border-r border-white/10 flex flex-col items-center py-6 fixed h-full z-40">
       {/* Logo */}
@@ -22,12 +25,14 @@ export default function Sidebar() {
       <nav className="flex flex-col space-y-4">
         {navigation.map((item) => {
           const Icon = item.icon;
+          const isActive = location === item.path;
           return (
             <button
               key={item.name}
+              onClick={() => setLocation(item.path)}
               className={cn(
                 "w-12 h-12 rounded-xl flex items-center justify-center transition-all",
-                item.current
+                isActive
                   ? "bg-apple-blue/20 text-apple-blue"
                   : "text-gray-400 hover:bg-white/10 hover:text-white"
               )}
