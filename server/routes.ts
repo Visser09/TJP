@@ -13,385 +13,15 @@ import {
 import { z } from "zod";
 import { generateTradingInsights, generateChatResponse } from './openai';
 import { tradovateAPI } from './tradovate';
-
-export async function registerRoutes(app: Express): Promise<Server> {
-  // Auth middleware
-  await setupAuth(app);
-
-  // Auth routes
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.dbUserId || req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      res.json(user);
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
-    }
-  });
-
-  // Trading accounts
-  app.get('/api/trading-accounts', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.dbUserId || req.user.claims.sub;
-      const accounts = await storage.getTradingAccounts(userId);
-      res.json(accounts);
-    } catch (error) {
-      console.error("Error fetching trading accounts:", error);
-      res.status(500).json({ message: "Failed to fetch trading accounts" });
-    }
-  });
-
-  app.post('/api/trading-accounts', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.dbUserId || req.user.claims.sub;
-      const accountData = insertTradingAccountSchema.parse({
-        ...req.body,
-        userId,
-      });
-      const account = await storage.createTradingAccount(accountData);
-      res.json(account);
-    } catch (error) {
-      console.error("Error creating trading account:", error);
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ message: "Invalid account data", errors: error.errors });
-      } else {
-        res.status(500).json({ message: "Failed to create trading account" });
-      }
-    }
-  });
-
-  // Trades
-  app.get('/api/trades', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.dbUserId || req.user.claims.sub;
-      const { accountId, from, to, limit } = req.query;
-      const trades = await storage.getTrades(
-        userId,
-        accountId as string,
-        from as string,
-        to as string,
-        limit ? parseInt(limit as string) : undefined
-      );
-      res.json(trades);
-    } catch (error) {
-      console.error("Error fetching trades:", error);
-      res.status(500).json({ message: "Failed to fetch trades" });
-    }
-  });
-
-  app.post('/api/trades', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.dbUserId || req.user.claims.sub;
-      const tradeData = insertTradeSchema.parse({
-        ...req.body,
-        userId,
-      });
-      const trade = await storage.createTrade(tradeData);
-      res.json(trade);
-    } catch (error) {
-      console.error("Error creating trade:", error);
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ message: "Invalid trade data", errors: error.errors });
-      } else {
-        res.status(500).json({ message: "Failed to create trade" });
-      }
-    }
-  });
-
-  app.get('/api/trades/recent', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.dbUserId || req.user.claims.sub;
-      const { accountId, limit } = req.query;
-      const trades = await storage.getRecentTrades(
-        userId,
-        accountId as string,
-        limit ? parseInt(limit as string) : undefined
-      );
-      res.json(trades);
-    } catch (error) {
-      console.error("Error fetching recent trades:", error);
-      res.status(500).json({ message: "Failed to fetch recent trades" });
-    }
-  });
-
-  // Analytics
-  app.get('/api/analytics/daily', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.dbUserId || req.user.claims.sub;
-      const { accountId, month } = req.query;
-      
-      const metrics = await storage.getDailyMetrics(
-        userId,
-        accountId as string,
-        month as string
-      );
-      
-      const journalEntries = await storage.getJournalEntries(userId, month as string);
-      const economicEvents = await storage.getEconomicEvents(month as string);
-      
-      // Transform data for calendar view
-      const days = metrics.map(metric => ({
-        date: metric.tradeDate,
-        trades: (metric.winCount || 0) + (metric.lossCount || 0),
-        pnl: parseFloat(metric.netPnl || '0'),
-        hasJournal: journalEntries.some(entry => entry.entryDate === metric.tradeDate),
-        isOpenMarket: isMarketOpen(metric.tradeDate),
-        events: economicEvents.filter(event => event.date === metric.tradeDate)
-      }));
-      
-      res.json({ days });
-    } catch (error) {
-      console.error("Error fetching daily analytics:", error);
-      res.status(500).json({ message: "Failed to fetch daily analytics" });
-    }
-  });
-
-  app.get('/api/analytics/performance', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.dbUserId || req.user.claims.sub;
-      const { accountId, range } = req.query;
-      
-      // Get recent trades for performance calculation
-      const trades = await storage.getRecentTrades(userId, accountId as string, 100);
-      
-      const totalPnl = trades.reduce((sum, trade) => sum + parseFloat(trade.pnl || '0'), 0);
-      const winningTrades = trades.filter(trade => parseFloat(trade.pnl || '0') > 0);
-      const winRate = trades.length > 0 ? (winningTrades.length / trades.length) * 100 : 0;
-      
-      const performanceData = {
-        totalPnl,
-        winRate,
-        totalTrades: trades.length,
-        winningTrades: winningTrades.length,
-        losingTrades: trades.length - winningTrades.length,
-      };
-      
-      res.json(performanceData);
-    } catch (error) {
-      console.error("Error fetching performance analytics:", error);
-      res.status(500).json({ message: "Failed to fetch performance analytics" });
-    }
-  });
-
-  // Journal
-  app.get('/api/journal', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.dbUserId || req.user.claims.sub;
-      const { month } = req.query;
-      const entries = await storage.getJournalEntries(userId, month as string);
-      res.json(entries);
-    } catch (error) {
-      console.error("Error fetching journal entries:", error);
-      res.status(500).json({ message: "Failed to fetch journal entries" });
-    }
-  });
-
-  app.post('/api/journal', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.dbUserId || req.user.claims.sub;
-      const entryData = insertJournalEntrySchema.parse({
-        ...req.body,
-        userId,
-      });
-      const entry = await storage.createJournalEntry(entryData);
-      res.json(entry);
-    } catch (error) {
-      console.error("Error creating journal entry:", error);
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ message: "Invalid journal entry data", errors: error.errors });
-      } else {
-        res.status(500).json({ message: "Failed to create journal entry" });
-      }
-    }
-  });
-
-  // Economic events
-  app.get('/api/econ', async (req, res) => {
-    try {
-      const { month } = req.query;
-      const events = await storage.getEconomicEvents(month as string);
-      res.json(events);
-    } catch (error) {
-      console.error("Error fetching economic events:", error);
-      res.status(500).json({ message: "Failed to fetch economic events" });
-    }
-  });
-
-  // AI insights
-  app.get('/api/ai-insights', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.dbUserId || req.user.claims.sub;
-      const { limit } = req.query;
-      const insights = await storage.getAiInsights(
-        userId,
-        limit ? parseInt(limit as string) : undefined
-      );
-      res.json(insights);
-    } catch (error) {
-      console.error("Error fetching AI insights:", error);
-      res.status(500).json({ message: "Failed to fetch AI insights" });
-    }
-  });
-
-  app.post('/api/ai-insights/generate', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.dbUserId || req.user.claims.sub;
-      
-      // Generate sample insights based on user data
-      const { accountId } = req.body;
-      const trades = await storage.getRecentTrades(userId, accountId, 100);
-      const insights = await generateInsights(userId, trades, accountId);
-      
-      // Save insights to database
-      for (const insight of insights) {
-        await storage.createAiInsight({
-          userId,
-          type: insight.type,
-          title: insight.title,
-          content: insight.content,
-        });
-      }
-      
-      res.json(insights);
-    } catch (error) {
-      console.error("Error generating AI insights:", error);
-      res.status(500).json({ message: "Failed to generate AI insights" });
-    }
-  });
-
-  app.post('/api/ai-chat', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.dbUserId || req.user.claims.sub;
-      const { message, accountId, conversationHistory } = req.body;
-      
-      // Generate AI response using OpenAI
-      const response = await generateChatResponse(message, accountId, conversationHistory, userId);
-      
-      res.json({ response });
-    } catch (error) {
-      console.error("Error processing AI chat:", error);
-      res.status(500).json({ message: "Failed to process AI chat" });
-    }
-  });
-
-  // Tradovate integration
-  app.post('/api/tradovate/auth', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.dbUserId || req.user.claims.sub;
-      const { accountId, credentials } = req.body;
-      
-      const { accessToken, refreshToken } = await tradovateAPI.authenticate(credentials);
-      
-      // Update account with tokens
-      await storage.updateTradingAccount(accountId, {
-        tradovateAccessToken: accessToken,
-        tradovateRefreshToken: refreshToken,
-        lastSyncAt: new Date(),
-      });
-      
-      res.json({ message: "Successfully connected to Tradovate" });
-    } catch (error) {
-      console.error("Error authenticating with Tradovate:", error);
-      res.status(500).json({ message: "Failed to authenticate with Tradovate" });
-    }
-  });
-
-  app.post('/api/tradovate/sync', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.dbUserId || req.user.claims.sub;
-      const { accountId } = req.body;
-      
-      const account = await storage.getTradingAccount(accountId);
-      if (!account || account.userId !== userId) {
-        return res.status(404).json({ message: "Account not found" });
-      }
-
-      if (!account.tradovateAccessToken) {
-        return res.status(400).json({ message: "Account not connected to Tradovate" });
-      }
-
-      // Set tokens for API calls
-      tradovateAPI.accessToken = account.tradovateAccessToken;
-      tradovateAPI.refreshToken = account.tradovateRefreshToken;
-
-      // Get Tradovate account ID from external account mapping
-      const tradovateAccounts = await tradovateAPI.getAccounts();
-      const matchingAccount = tradovateAccounts.find(acc => 
-        acc.name.includes(account.propFirm) || acc.accountType === account.accountType
-      );
-
-      if (!matchingAccount) {
-        return res.status(404).json({ message: "No matching Tradovate account found" });
-      }
-
-      // Sync trades from Tradovate
-      const tradovateTrades = await tradovateAPI.syncAccountTrades(matchingAccount.id);
-      
-      let syncedCount = 0;
-      for (const tradovateeTrade of tradovateTrades) {
-        // Check if trade already exists
-        const existingTrade = await storage.getTradeByExternalId(userId, accountId, tradovateeTrade.id.toString());
-        
-        if (!existingTrade) {
-          await storage.createTrade({
-            userId,
-            tradingAccountId: accountId,
-            symbol: tradovateeTrade.symbol,
-            side: tradovateeTrade.side.toLowerCase() as 'long' | 'short',
-            qty: tradovateeTrade.quantity.toString(),
-            entryPrice: tradovateeTrade.price.toString(),
-            exitPrice: tradovateeTrade.price.toString(),
-            entryTime: new Date(tradovateeTrade.timestamp),
-            exitTime: new Date(tradovateeTrade.timestamp),
-            fees: tradovateeTrade.commission.toString(),
-            pnl: tradovateeTrade.pnl.toString(),
-            tags: JSON.stringify(['tradovate-sync']),
-          });
-          syncedCount++;
-        }
-      }
-
-      // Update last sync time
-      await storage.updateTradingAccount(accountId, {
-        lastSyncAt: new Date(),
-      });
-
-      res.json({ message: `Synced ${syncedCount} new trades from Tradovate`, syncedTrades: syncedCount });
-    } catch (error) {
-      console.error("Error syncing with Tradovate:", error);
-      res.status(500).json({ message: "Failed to sync with Tradovate" });
-    }
-  });
-
-  app.get('/api/tradovate/accounts', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.dbUserId || req.user.claims.sub;
-      const { accountId } = req.query;
-      
-      const account = await storage.getTradingAccount(accountId as string);
-      if (!account || account.userId !== userId) {
-        return res.status(404).json({ message: "Account not found" });
-      }
-
-      if (!account.tradovateAccessToken) {
-        return res.status(400).json({ message: "Account not connected to Tradovate" });
-      }
-
-      tradovateAPI.accessToken = account.tradovateAccessToken;
-      tradovateAPI.refreshToken = account.tradovateRefreshToken;
-
-      const accounts = await tradovateAPI.getAccounts();
-      res.json(accounts);
-    } catch (error) {
-      console.error("Error fetching Tradovate accounts:", error);
-      res.status(500).json({ message: "Failed to fetch Tradovate accounts" });
-    }
-  });
-
-  const httpServer = createServer(app);
-  return httpServer;
-}
+import multer from "multer";
+import {
+  parseCsvFile,
+  detectCsvFormat,
+  importCsvTrades,
+  saveMappingProfile,
+  getMappingProfiles,
+  type MappingSpec
+} from "./csvImport";
 
 // Helper functions
 function isMarketOpen(date: string): boolean {
@@ -455,4 +85,382 @@ async function processAiChat(userId: string, message: string): Promise<string> {
   // This would integrate with an AI service for chat functionality
   // For now, return a simple response
   return "I'm analyzing your trading data. How can I help you improve your performance?";
+}
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  // Auth middleware
+  await setupAuth(app);
+
+  // Initialize multer for file uploads
+  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+  // Auth routes
+  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.dbUserId || req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Trading accounts
+  app.get('/api/trading-accounts', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.dbUserId || req.user.claims.sub;
+      const accounts = await storage.getTradingAccounts(userId);
+      res.json(accounts);
+    } catch (error) {
+      console.error("Error fetching trading accounts:", error);
+      res.status(500).json({ message: "Failed to fetch trading accounts" });
+    }
+  });
+
+  app.post('/api/trading-accounts', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.dbUserId || req.user.claims.sub;
+      const accountData = insertTradingAccountSchema.parse({
+        ...req.body,
+        userId,
+      });
+      const account = await storage.createTradingAccount(accountData);
+      res.json(account);
+    } catch (error) {
+      console.error("Error creating trading account:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Invalid account data", errors: error.errors });
+      } else {
+        res.status(500).json({ message: "Failed to create trading account" });
+      }
+    }
+  });
+
+  // Trades
+  app.get('/api/trades', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.dbUserId || req.user.claims.sub;
+      const { accountId, startDate, endDate } = req.query;
+      const trades = await storage.getTrades(
+        userId,
+        accountId as string,
+        startDate as string,
+        endDate as string
+      );
+      res.json(trades);
+    } catch (error) {
+      console.error("Error fetching trades:", error);
+      res.status(500).json({ message: "Failed to fetch trades" });
+    }
+  });
+
+  app.post('/api/trades', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.dbUserId || req.user.claims.sub;
+      const tradeData = insertTradeSchema.parse({
+        ...req.body,
+        userId,
+      });
+      const trade = await storage.createTrade(tradeData);
+      res.json(trade);
+    } catch (error) {
+      console.error("Error creating trade:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Invalid trade data", errors: error.errors });
+      } else {
+        res.status(500).json({ message: "Failed to create trade" });
+      }
+    }
+  });
+
+  // Journal entries
+  app.get('/api/journal-entries', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.dbUserId || req.user.claims.sub;
+      const { date, accountId } = req.query;
+      const entries = await storage.getJournalEntries(userId, date as string, accountId as string);
+      res.json(entries);
+    } catch (error) {
+      console.error("Error fetching journal entries:", error);
+      res.status(500).json({ message: "Failed to fetch journal entries" });
+    }
+  });
+
+  app.post('/api/journal-entries', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.dbUserId || req.user.claims.sub;
+      const entryData = insertJournalEntrySchema.parse({
+        ...req.body,
+        userId,
+      });
+      const entry = await storage.createJournalEntry(entryData);
+      res.json(entry);
+    } catch (error) {
+      console.error("Error creating journal entry:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Invalid entry data", errors: error.errors });
+      } else {
+        res.status(500).json({ message: "Failed to create journal entry" });
+      }
+    }
+  });
+
+  // Daily metrics
+  app.get('/api/daily-metrics', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.dbUserId || req.user.claims.sub;
+      const { accountId, startDate, endDate } = req.query;
+      const metrics = await storage.getDailyMetrics(
+        userId,
+        accountId as string,
+        startDate as string,
+        endDate as string
+      );
+      res.json(metrics);
+    } catch (error) {
+      console.error("Error fetching daily metrics:", error);
+      res.status(500).json({ message: "Failed to fetch daily metrics" });
+    }
+  });
+
+  // Economic events
+  app.get('/api/economic-events', isAuthenticated, async (req: any, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      const events = await storage.getEconomicEvents(startDate as string, endDate as string);
+      res.json(events);
+    } catch (error) {
+      console.error("Error fetching economic events:", error);
+      res.status(500).json({ message: "Failed to fetch economic events" });
+    }
+  });
+
+  app.post('/api/economic-events', isAuthenticated, async (req: any, res) => {
+    try {
+      const eventData = insertEconomicEventSchema.parse(req.body);
+      const event = await storage.createEconomicEvent(eventData);
+      res.json(event);
+    } catch (error) {
+      console.error("Error creating economic event:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Invalid event data", errors: error.errors });
+      } else {
+        res.status(500).json({ message: "Failed to create economic event" });
+      }
+    }
+  });
+
+  // Analytics
+  app.get('/api/analytics', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.dbUserId || req.user.claims.sub;
+      const { accountId, period = '30d' } = req.query;
+      
+      const endDate = new Date();
+      const startDate = new Date();
+      
+      switch (period) {
+        case '7d':
+          startDate.setDate(endDate.getDate() - 7);
+          break;
+        case '30d':
+          startDate.setDate(endDate.getDate() - 30);
+          break;
+        case '90d':
+          startDate.setDate(endDate.getDate() - 90);
+          break;
+        default:
+          startDate.setDate(endDate.getDate() - 30);
+      }
+
+      const [trades, dailyMetrics] = await Promise.all([
+        storage.getTrades(userId, accountId as string, startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]),
+        storage.getDailyMetrics(userId, accountId as string, startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0])
+      ]);
+
+      // Calculate analytics
+      const totalTrades = trades.length;
+      const winningTrades = trades.filter((t: any) => t.realizedPnl > 0).length;
+      const losingTrades = trades.filter((t: any) => t.realizedPnl < 0).length;
+      const winRate = totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0;
+      
+      const totalPnl = trades.reduce((sum: number, trade: any) => sum + trade.realizedPnl, 0);
+      const totalFees = trades.reduce((sum: number, trade: any) => sum + (trade.fees || 0), 0);
+      const netPnl = totalPnl - totalFees;
+
+      const avgWin = winningTrades > 0 ? 
+        trades.filter((t: any) => t.realizedPnl > 0).reduce((sum: number, t: any) => sum + t.realizedPnl, 0) / winningTrades : 0;
+      const avgLoss = losingTrades > 0 ? 
+        Math.abs(trades.filter((t: any) => t.realizedPnl < 0).reduce((sum: number, t: any) => sum + t.realizedPnl, 0) / losingTrades) : 0;
+
+      const profitFactor = avgLoss > 0 ? avgWin / avgLoss : 0;
+
+      // Trading calendar data
+      const calendarData = dailyMetrics.map((metric: any) => ({
+        date: metric.date,
+        pnl: metric.totalPnl - metric.totalFees,
+        trades: metric.totalTrades,
+        winRate: metric.totalTrades > 0 ? (metric.winningTrades / metric.totalTrades) * 100 : 0,
+        isMarketOpen: isMarketOpen(metric.date)
+      }));
+
+      // Performance chart data
+      let runningPnl = 0;
+      const performanceData = calendarData.map((day: any) => {
+        runningPnl += day.pnl;
+        return {
+          date: day.date,
+          cumulativePnl: runningPnl,
+          dailyPnl: day.pnl
+        };
+      });
+
+      res.json({
+        summary: {
+          totalTrades,
+          winningTrades,
+          losingTrades,
+          winRate: Math.round(winRate * 100) / 100,
+          totalPnl: Math.round(totalPnl * 100) / 100,
+          totalFees: Math.round(totalFees * 100) / 100,
+          netPnl: Math.round(netPnl * 100) / 100,
+          avgWin: Math.round(avgWin * 100) / 100,
+          avgLoss: Math.round(avgLoss * 100) / 100,
+          profitFactor: Math.round(profitFactor * 100) / 100
+        },
+        calendarData,
+        performanceData
+      });
+    } catch (error) {
+      console.error("Error generating analytics:", error);
+      res.status(500).json({ message: "Failed to generate analytics" });
+    }
+  });
+
+  // AI insights
+  app.get('/api/ai-insights', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.dbUserId || req.user.claims.sub;
+      const { accountId } = req.query;
+      
+      const trades = await storage.getTrades(userId, accountId as string);
+      const insights = await generateInsights(userId, trades, accountId as string);
+      
+      res.json(insights);
+    } catch (error) {
+      console.error("Error generating AI insights:", error);
+      res.status(500).json({ message: "Failed to generate AI insights" });
+    }
+  });
+
+  // AI chat
+  app.post('/api/ai-chat', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.dbUserId || req.user.claims.sub;
+      const { message, context } = req.body;
+      
+      if (!message) {
+        return res.status(400).json({ message: "Message is required" });
+      }
+
+      // Get user's recent trades and journal entries for context
+      const [trades, journalEntries] = await Promise.all([
+        storage.getTrades(userId, context?.accountId),
+        storage.getJournalEntries(userId, undefined, context?.accountId)
+      ]);
+
+      const response = await generateChatResponse(message, { trades, journalEntries, context });
+      
+      res.json({ response });
+    } catch (error) {
+      console.error("Error processing AI chat:", error);
+      res.status(500).json({ message: "Failed to process AI chat" });
+    }
+  });
+
+  // Tradovate integration
+  app.post('/api/tradovate/sync', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.dbUserId || req.user.claims.sub;
+      const { accountId, credentials } = req.body;
+      
+      if (!accountId || !credentials) {
+        return res.status(400).json({ message: "Account ID and credentials are required" });
+      }
+
+      // This would integrate with Tradovate API
+      const result = await tradovateAPI.syncTrades(accountId, credentials);
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Error syncing with Tradovate:", error);
+      res.status(500).json({ message: "Failed to sync with Tradovate" });
+    }
+  });
+
+  // CSV Import routes
+  app.get('/api/import/mappings', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.dbUserId || req.user.claims.sub;
+      const profiles = await getMappingProfiles(userId);
+      res.json(profiles);
+    } catch (error) {
+      console.error('Error fetching mapping profiles:', error);
+      res.status(500).json({ message: 'Failed to fetch mapping profiles' });
+    }
+  });
+
+  app.post('/api/import/csv/preview', isAuthenticated, upload.single('file'), async (req: any, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+      const rows = await parseCsvFile(req.file.buffer);
+      const headers = Object.keys(rows[0] || {});
+      const detected = detectCsvFormat(headers);
+      res.json({
+        headers,
+        previewRows: rows.slice(0, 100),
+        totalRows: rows.length,
+        detectedFormat: detected || undefined,
+        filename: req.file.originalname,
+      });
+    } catch (error) {
+      console.error('CSV preview error:', error);
+      res.status(500).json({ message: 'Failed to preview CSV' });
+    }
+  });
+
+  app.post('/api/import/csv', isAuthenticated, upload.single('file'), async (req: any, res) => {
+    try {
+      const userId = req.user.dbUserId || req.user.claims.sub;
+      const { accountId, source, mapping: mappingJson, saveMapping, mappingName } = req.body;
+      if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+      if (!accountId) return res.status(400).json({ message: 'Missing accountId' });
+
+      const rows = await parseCsvFile(req.file.buffer);
+      const headers = Object.keys(rows[0] || {});
+
+      let mapping: MappingSpec;
+      try {
+        mapping = JSON.parse(mappingJson);
+      } catch {
+        return res.status(400).json({ message: 'Invalid mapping JSON' });
+      }
+
+      const detected = source || (detectCsvFormat(headers)?.source ?? 'custom');
+      const result = await importCsvTrades(userId, accountId, rows, mapping, detected);
+
+      if (saveMapping === 'true' && mappingName) {
+        await saveMappingProfile(userId, mappingName, detected, mapping);
+      }
+
+      res.json(result);
+    } catch (error) {
+      console.error('CSV import error:', error);
+      res.status(500).json({ message: 'Failed to import CSV' });
+    }
+  });
+
+  const httpServer = createServer(app);
+  return httpServer;
 }

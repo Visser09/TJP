@@ -5,6 +5,7 @@ import {
   jsonb,
   pgTable,
   timestamp,
+  uniqueIndex,
   varchar,
   text,
   numeric,
@@ -80,8 +81,15 @@ export const trades = pgTable("trades", {
   fees: numeric("fees").default('0'),
   pnl: numeric("pnl"),
   tags: jsonb("tags").default('[]'),
+  brokerExecutionId: varchar("broker_execution_id"),
+  rowHash: varchar("row_hash"),
+  importSource: varchar("import_source"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  tradesUserAccountIdx: index("trades_user_account_idx").on(table.userId, table.tradingAccountId),
+  tradesDateIdx: index("trades_date_idx").on(table.entryTime),
+  uniqueRowHashIdx: uniqueIndex("trades_row_hash_uidx").on(table.userId, table.tradingAccountId, table.rowHash),
+}));
 
 // Journal entries
 export const journalEntries = pgTable("journal_entries", {
@@ -134,6 +142,16 @@ export const aiInsights = pgTable("ai_insights", {
   type: insightTypeEnum("type").notNull(),
   title: text("title").notNull(),
   content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// CSV import mapping profiles
+export const csvMappingProfiles = pgTable("csv_mapping_profiles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  name: varchar("name").notNull(),
+  source: varchar("source").notNull(), // 'apex', 'topstep', 'tpt', 'custom'
+  mapping: jsonb("mapping").notNull(), // column mappings
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -201,6 +219,13 @@ export const aiInsightsRelations = relations(aiInsights, ({ one }) => ({
   }),
 }));
 
+export const csvMappingProfilesRelations = relations(csvMappingProfiles, ({ one }) => ({
+  user: one(users, {
+    fields: [csvMappingProfiles.userId],
+    references: [users.id],
+  }),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -237,6 +262,11 @@ export const insertAiInsightSchema = createInsertSchema(aiInsights).omit({
   createdAt: true,
 });
 
+export const insertCsvMappingProfileSchema = createInsertSchema(csvMappingProfiles).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type UpsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -252,3 +282,5 @@ export type InsertEconomicEvent = z.infer<typeof insertEconomicEventSchema>;
 export type EconomicEvent = typeof economicEvents.$inferSelect;
 export type InsertAiInsight = z.infer<typeof insertAiInsightSchema>;
 export type AiInsight = typeof aiInsights.$inferSelect;
+export type InsertCsvMappingProfile = z.infer<typeof insertCsvMappingProfileSchema>;
+export type CsvMappingProfile = typeof csvMappingProfiles.$inferSelect;

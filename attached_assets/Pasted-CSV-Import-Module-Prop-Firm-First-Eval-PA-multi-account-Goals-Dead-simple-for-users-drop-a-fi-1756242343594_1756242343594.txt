@@ -1,0 +1,188 @@
+CSV Import Module — Prop-Firm First (Eval/PA, multi-account)
+Goals
+
+Dead simple for users: drop a file → we detect the format → preview → import.
+
+Works with Apex/TopStep/TPT (and “Unknown CSV” via a mapping wizard).
+
+Tracks multiple accounts (Eval, PA, multiple Apex) cleanly.
+
+Feeds everything the app already shows: Dashboard, Calendar, AI. (Hooks already exist: dashboard widgets, recent trades, AI insights, calendar)
+
+UX Flow (Apple-simple)
+
+Where: “Quick Actions” (Dashboard) gets an Import CSV button next to “Sync Tradovate”.
+
+Step 1 – Select Source: Apex / TopStep / TPT / Auto-Detect / “Other (Map columns)”.
+
+Step 2 – Choose Account: dropdown of user’s accounts or Create new (APEX-Eval-1, APEX-PA-2, etc.).
+
+Step 3 – Upload & Preview: drag-and-drop CSV → we parse first 100 rows → show a clean preview table + detected columns.
+
+Step 4 – Confirm Mapping: if known format → pre-mapped; if unknown → simple mapping UI (pick which column is Symbol, Side, Qty…).
+
+Step 5 – Import: progress bar + dedupe rules; then success screen with “X trades added, Y updated”, and “Go to Calendar / Dashboard”.
+
+Nice to have now: remember last mapping per source; one-click re-import.
+
+File Types We Support (v1)
+
+Trade fills CSV (entries/exits/qty/fees/pnl/timestamps).
+
+Daily statement CSV (day-level balance, starting/ending equity, trailing status).
+If user uploads both, we merge: intraday trades + end-of-day balances.
+
+Universal Schema (DB targets)
+
+trades
+
+user_id, trading_account_id, broker_exec_id? (or hash),
+
+symbol, side (long/short), qty,
+
+entry_price, exit_price, entry_time, exit_time,
+
+fees, pnl.
+
+daily_metrics
+
+user_id, trading_account_id, trade_date,
+
+gross_pnl, net_pnl, win_count, loss_count,
+
+max_drawdown?, stats.jsonb (e.g., { "balance": 51235.10, "trail": 49820.00 }).
+
+These already flow into Dashboard metrics/cards, Performance chart, Recent trades, AI Insights, and the Calendar (PnL/trades per day).
+
+Auto-Detect Heuristics (source = Apex/TopStep/TPT)
+
+Look at header names & sample values:
+
+Apex: headers often include Entry Time, Exit Time, Contract, P/L, Commissions.
+
+TopStep: Instrument, Quantity, Buy/Sell, PnL, Fees.
+
+TPT: Symbol, Side, Filled Qty, Avg Price, Realized PnL.
+
+Normalize values:
+
+Side: BUY/SELL → long/short
+
+Symbol: MNQZ4 → base NQ + contract (optional store raw)
+
+Times: parse to ET; if timezone missing, assume US/Eastern for calendar rollups.
+
+Numbers: strip $, commas; treat blanks as 0.
+
+If headers unknown → fall back to Mapping Wizard.
+
+Mapping Wizard (for unknown CSVs)
+
+For each required field, show a dropdown of detected columns:
+
+Required: Symbol, Side, Qty, Entry Time, Exit Time (or single Time + Entry/Exit flag), Entry Price, Exit Price (or single Price + fill side), PnL (or we compute), Fees (optional).
+
+Preview recalculations live (RR, net PnL = gross − fees).
+
+Save mapping profile with a friendly name so next upload is one-click.
+
+Dedupe & Idempotency
+
+Compute a row hash: hash(accountId + symbol + side + qty + entry_time + exit_time + entry_price + exit_price) or use broker’s fill/order id if present.
+
+If hash exists → update (in case PnL/fees corrected).
+
+Else → insert.
+
+After import, recompute daily_metrics for affected dates only.
+
+Handling Multi-Account (Eval/PA/many Apex)
+
+During import, user must pick account or “Create account”.
+
+We store to that trading_account_id so Dashboard/Calendar/AI can filter by account.
+
+Show account badges in recent trades (e.g., APEX-PA-1). (Component already supports badges/labels visually; we only add the field)
+
+Frontend Work (minimal, fits current UI)
+
+Dashboard
+
+Add “Import CSV” button in Quick Actions next to Sync Tradovate. Clicking opens ImportCsvModal.
+
+ImportCsvModal
+
+Steps UI (source → account → upload → preview → import).
+
+Progress + success states.
+
+On success, refresh:
+
+/api/analytics/performance (cards, chart),
+
+/api/trades (recent trades),
+
+/api/ai-insights (optional regenerate).
+(Endpoints are already used in the app and will update the widgets)
+
+Calendar
+
+No UI change; new data auto-surfaces: trade count, day PnL.
+
+Backend Endpoints (Fast build)
+POST /api/import/csv
+FormData: {
+  userId: string,
+  accountId: string,          // or “newAccountName” + “accountType”
+  source?: "apex"|"topstep"|"tpt"|"auto"|"custom",
+  mapping?: MappingSpec,      // only for custom/unknown
+  file: CSV
+}
+Response: { inserted: number, updated: number, daysTouched: string[] }
+
+
+Logic:
+
+Parse CSV (stream).
+
+Detect/Apply mapping → normalize rows to universal schema.
+
+Dedupe (hash or broker id).
+
+Upsert trades; accumulate by trade_date.
+
+Recompute daily_metrics for impacted dates.
+
+Return counts + dates.
+
+GET /api/import/mappings?userId=
+POST /api/import/mappings  // save a custom mapping profile
+
+Acceptance Criteria (QA)
+
+Upload an Apex CSV → auto-detects columns → preview shows correct time/side/qty/pnl → imports; Recent Trades shows items; Dashboard metrics update; Calendar displays correct counts/PnL.
+
+Upload a TopStep CSV → same result.
+
+Upload an unknown CSV → mapping wizard appears; once mapped, import works; mapping is saved for next time.
+
+Multi-account: import APEX-Eval-1 and APEX-PA-1 files → data remains separate; switching accounts changes the Dashboard/Calendar/AI context (account switcher is already planned—keep it in the header or dashboard top).
+
+Dedupe: re-import same CSV → updated=0, inserted=0 (unless fields changed).
+
+Performance: 5k rows parse & import in <5s on Replit.
+
+Copy for Users (in the UI)
+
+“Import from Prop Firms (CSV)”
+Download your daily/weekly statement from Apex/TopStep/TPT and drop it here. We’ll detect the format automatically. If it’s a new format, you can map columns once and we’ll remember it.
+
+Tip: Name your accounts clearly (e.g., “APEX-Eval-1”, “APEX-PA-2”). We use this to keep your stats and calendar separate per account.
+
+Future Automation (not required today)
+
+Email parser: user forwards statement emails; we ingest CSV attachments or parse the email body.
+
+Browser extension: pull fills/balances from the prop dashboard while logged in.
+
+Tradovate API: keep for retail accounts via OAuth; UI can show both “API Connect” and “Import CSV”.

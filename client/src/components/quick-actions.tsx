@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Plus, RefreshCw, Calendar, Brain } from "lucide-react";
+import { Plus, RefreshCw, Calendar, Brain, Upload } from "lucide-react";
+import { ImportCsvModal } from "@/components/import-csv-modal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,6 +36,12 @@ const actions = [
     color: "text-blue-400",
     testId: "button-ai-coach",
   },
+  {
+    name: "Import CSV",
+    icon: Upload,
+    color: "text-orange-400",
+    testId: "button-import-csv",
+  },
 ];
 
 interface QuickActionsProps {
@@ -45,6 +52,7 @@ interface QuickActionsProps {
 export default function QuickActions({ currentAccount, onSyncTrades }: QuickActionsProps) {
   const [isAddTradeOpen, setIsAddTradeOpen] = useState(false);
   const [isAiCoachOpen, setIsAiCoachOpen] = useState(false);
+  const [isImportCsvOpen, setIsImportCsvOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -96,6 +104,7 @@ export default function QuickActions({ currentAccount, onSyncTrades }: QuickActi
       calendarElement?.scrollIntoView({ behavior: 'smooth' });
     },
     "AI Coach": () => setIsAiCoachOpen(true),
+    "Import CSV": () => setIsImportCsvOpen(true),
   };
 
   return (
@@ -249,6 +258,12 @@ export default function QuickActions({ currentAccount, onSyncTrades }: QuickActi
           </div>
         </DialogContent>
       </Dialog>
+      
+      {/* Import CSV Modal */}
+      <ImportCsvModal
+        isOpen={isImportCsvOpen}
+        onClose={() => setIsImportCsvOpen(false)}
+      />
     </>
   );
 }
