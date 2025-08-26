@@ -7,16 +7,17 @@ import Header from "@/components/header";
 import QuickActions from "@/components/quick-actions";
 import PerformanceChart from "@/components/performance-chart";
 import MetricsGrid from "@/components/metrics-grid";
-import TradingCalendar from "@/components/trading-calendar";
 import AiInsights from "@/components/ai-insights";
 import RecentTrades from "@/components/recent-trades";
 import PropFirmSwitcher from "@/components/prop-firm-switcher";
+import AIChat from "@/components/ai-chat";
 import type { TradingAccount } from "@shared/schema";
 
 export default function Dashboard() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
   const [currentAccount, setCurrentAccount] = useState<TradingAccount | null>(null);
+  const [isChatMinimized, setIsChatMinimized] = useState(true);
 
   const { data: accounts = [] } = useQuery<TradingAccount[]>({
     queryKey: ['/api/trading-accounts'],
@@ -77,24 +78,29 @@ export default function Dashboard() {
             <MetricsGrid currentAccount={currentAccount} />
             
             {/* Main Content Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Trading Calendar */}
-              <div className="lg:col-span-2">
-                <TradingCalendar currentAccount={currentAccount} />
-              </div>
-
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* AI Insights & Recent Trades */}
               <div className="space-y-6">
                 <AiInsights currentAccount={currentAccount} />
                 <RecentTrades currentAccount={currentAccount} />
               </div>
+              
+              {/* Performance Chart */}
+              <div>
+                <PerformanceChart currentAccount={currentAccount} />
+              </div>
             </div>
 
-            {/* Performance Chart */}
-            <PerformanceChart currentAccount={currentAccount} />
           </main>
         </div>
       </div>
+      
+      {/* AI Chat Component */}
+      <AIChat 
+        currentAccount={currentAccount}
+        isMinimized={isChatMinimized}
+        onToggleMinimize={() => setIsChatMinimized(!isChatMinimized)}
+      />
     </div>
   );
 }

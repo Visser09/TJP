@@ -11,7 +11,7 @@ import {
   insertAiInsightSchema 
 } from "@shared/schema";
 import { z } from "zod";
-import { generateTradingInsights } from './openai';
+import { generateTradingInsights, generateChatResponse } from './openai';
 import { tradovateAPI } from './tradovate';
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -260,13 +260,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/ai-insights/chat', isAuthenticated, async (req: any, res) => {
+  app.post('/api/ai-chat', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.dbUserId || req.user.claims.sub;
-      const { message } = req.body;
+      const { message, accountId, conversationHistory } = req.body;
       
-      // This would integrate with an AI service
-      const response = await processAiChat(userId, message);
+      // Generate AI response using OpenAI
+      const response = await generateChatResponse(message, accountId, conversationHistory);
       
       res.json({ response });
     } catch (error) {
