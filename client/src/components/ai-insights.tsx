@@ -36,7 +36,7 @@ export default function AiInsights({ currentAccount }: AiInsightsProps) {
 
   const generateInsightsMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("/api/ai-insights/generate", "POST", {
+      await apiRequest("POST", "/api/ai-insights/generate", {
         accountId: currentAccount?.id,
       });
     },

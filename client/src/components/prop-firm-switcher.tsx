@@ -38,7 +38,7 @@ export default function PropFirmSwitcher({ currentAccount, onAccountChange }: Pr
 
   const createAccountMutation = useMutation({
     mutationFn: async (data: { propFirm: string; accountType: string; nickname: string }) => {
-      return apiRequest('/api/trading-accounts', 'POST', data);
+      return apiRequest('POST', '/api/trading-accounts', data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/trading-accounts'] });

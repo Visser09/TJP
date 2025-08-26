@@ -30,7 +30,7 @@ export default function TradovateConnect({ account }: TradovateConnectProps) {
 
   const authMutation = useMutation({
     mutationFn: async (data: typeof credentials) => {
-      return apiRequest('/api/tradovate/auth', 'POST', {
+      return apiRequest('POST', '/api/tradovate/auth', {
         accountId: account.id,
         credentials: {
           username: data.username,
@@ -60,7 +60,7 @@ export default function TradovateConnect({ account }: TradovateConnectProps) {
 
   const syncMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest('/api/tradovate/sync', 'POST', {
+      return apiRequest('POST', '/api/tradovate/sync', {
         accountId: account.id,
       });
     },

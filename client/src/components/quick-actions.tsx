@@ -50,7 +50,7 @@ export default function QuickActions({ currentAccount, onSyncTrades }: QuickActi
 
   const addTradeMutation = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest('/api/trades', 'POST', {
+      return apiRequest('POST', '/api/trades', {
         ...data,
         tradingAccountId: currentAccount?.id,
       });

@@ -6,6 +6,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/useAuth";
+import { isUnauthorizedError } from "@/lib/authUtils";
 
 interface AIInsight {
   id: string;
@@ -21,19 +23,33 @@ export default function AICoach() {
   const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
-  const { data: insights = [], isLoading } = useQuery<AIInsight[]>({
-    queryKey: ['/api/ai-insights']
+  const { data: insights = [], isLoading, error } = useQuery<AIInsight[]>({
+    queryKey: ['/api/ai-insights'],
+    retry: (failureCount, error) => {
+      if (isUnauthorizedError(error as Error)) {
+        return false;
+      }
+      return failureCount < 3;
+    }
   });
+
+  // Handle unauthorized error
+  if (error && isUnauthorizedError(error as Error)) {
+    toast({
+      title: "Unauthorized",
+      description: "You are logged out. Logging in again...",
+      variant: "destructive",
+    });
+    setTimeout(() => {
+      window.location.href = "/api/login";
+    }, 500);
+  }
 
   const generateInsightsMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch('/api/ai-insights/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      if (!response.ok) throw new Error('Failed to generate insights');
-      return response.json();
+      return await apiRequest('POST', '/api/ai-insights/generate', {});
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ai-insights'] });

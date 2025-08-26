@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { apiRequest } from "@/lib/queryClient";
+import { isUnauthorizedError } from "@/lib/authUtils";
 
 interface ChatMessage {
   id: string;
@@ -55,19 +57,11 @@ export default function AIChat({ currentAccount, isMinimized = false, onToggleMi
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/ai-chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: userMessage.content,
-          accountId: currentAccount?.id,
-          conversationHistory: messages.slice(-10) // Send last 10 messages for context
-        })
+      const response = await apiRequest('POST', '/api/ai-chat', {
+        message: userMessage.content,
+        accountId: currentAccount?.id,
+        conversationHistory: messages.slice(-10) // Send last 10 messages for context
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to get AI response');
-      }
 
       const data = await response.json();
       
@@ -79,8 +73,21 @@ export default function AIChat({ currentAccount, isMinimized = false, onToggleMi
       };
 
       setMessages(prev => [...prev, aiMessage]);
-    } catch (error) {
+    } catch (error: any) {
       console.error('AI Chat error:', error);
+      
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      
       toast({
         title: "Chat Error",
         description: "Failed to get AI response. Please try again.",
