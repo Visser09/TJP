@@ -19,7 +19,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.dbUserId || req.user.claims.sub;
       const user = await storage.getUser(userId);
       res.json(user);
     } catch (error) {
@@ -31,7 +31,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Trading accounts
   app.get('/api/trading-accounts', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.dbUserId || req.user.claims.sub;
       const accounts = await storage.getTradingAccounts(userId);
       res.json(accounts);
     } catch (error) {
@@ -42,7 +42,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/trading-accounts', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.dbUserId || req.user.claims.sub;
       const accountData = insertTradingAccountSchema.parse({
         ...req.body,
         userId,
@@ -62,7 +62,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Trades
   app.get('/api/trades', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.dbUserId || req.user.claims.sub;
       const { accountId, from, to, limit } = req.query;
       const trades = await storage.getTrades(
         userId,
@@ -80,7 +80,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/trades', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.dbUserId || req.user.claims.sub;
       const tradeData = insertTradeSchema.parse({
         ...req.body,
         userId,
@@ -99,7 +99,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/trades/recent', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.dbUserId || req.user.claims.sub;
       const { accountId, limit } = req.query;
       const trades = await storage.getRecentTrades(
         userId,
@@ -116,7 +116,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Analytics
   app.get('/api/analytics/daily', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.dbUserId || req.user.claims.sub;
       const { accountId, month } = req.query;
       
       const metrics = await storage.getDailyMetrics(
@@ -147,7 +147,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/analytics/performance', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.dbUserId || req.user.claims.sub;
       const { accountId, range } = req.query;
       
       // Get recent trades for performance calculation
@@ -175,7 +175,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Journal
   app.get('/api/journal', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.dbUserId || req.user.claims.sub;
       const { month } = req.query;
       const entries = await storage.getJournalEntries(userId, month as string);
       res.json(entries);
@@ -187,7 +187,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/journal', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.dbUserId || req.user.claims.sub;
       const entryData = insertJournalEntrySchema.parse({
         ...req.body,
         userId,
@@ -219,7 +219,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // AI insights
   app.get('/api/ai-insights', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.dbUserId || req.user.claims.sub;
       const { limit } = req.query;
       const insights = await storage.getAiInsights(
         userId,
@@ -234,7 +234,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/ai-insights/generate', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.dbUserId || req.user.claims.sub;
       
       // Generate sample insights based on user data
       const trades = await storage.getRecentTrades(userId, undefined, 100);
@@ -259,7 +259,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/ai-insights/chat', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.dbUserId || req.user.claims.sub;
       const { message } = req.body;
       
       // This would integrate with an AI service
