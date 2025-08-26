@@ -412,21 +412,29 @@ async function generateInsights(userId: string, trades: any[], accountId?: strin
         type: 'performance',
         title: 'Performance Analysis',
         content: aiInsights.performance,
+        severity: 'medium',
+        actionable: true,
       },
       {
         type: 'risk',
         title: 'Risk Assessment',
         content: aiInsights.risk,
+        severity: 'high',
+        actionable: true,
       },
       {
         type: 'pattern',
         title: 'Pattern Recognition',
         content: aiInsights.patterns,
+        severity: 'low',
+        actionable: false,
       },
       {
         type: 'suggestion',
         title: 'AI Suggestions',
         content: aiInsights.suggestions,
+        severity: 'medium',
+        actionable: true,
       },
     ];
   } catch (error) {
@@ -436,6 +444,8 @@ async function generateInsights(userId: string, trades: any[], accountId?: strin
         type: 'suggestion',
         title: 'Trading Journal',
         content: 'Continue trading and journaling to get personalized AI insights.',
+        severity: 'low',
+        actionable: true,
       },
     ];
   }

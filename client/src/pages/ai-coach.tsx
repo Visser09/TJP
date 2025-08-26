@@ -157,7 +157,7 @@ export default function AICoach() {
                   return (
                     <div
                       key={insight.id}
-                      className={`rounded-xl border p-6 ${getInsightColor(insight.severity)}`}
+                      className={`rounded-xl border p-6 ${getInsightColor(insight.severity || 'low')}`}
                       data-testid={`insight-${insight.id}`}
                     >
                       <div className="flex items-start space-x-4">
@@ -170,8 +170,8 @@ export default function AICoach() {
                               {insight.title}
                             </h3>
                             <div className="flex items-center space-x-2">
-                              <span className={`px-2 py-1 rounded-full text-xs ${getSeverityColor(insight.severity)}`}>
-                                {insight.severity.toUpperCase()}
+                              <span className={`px-2 py-1 rounded-full text-xs ${getSeverityColor(insight.severity || 'low')}`}>
+                                {(insight.severity || 'low').toUpperCase()}
                               </span>
                               <span className="px-2 py-1 rounded-full text-xs bg-gray-700 text-gray-300 capitalize">
                                 {insight.type}
