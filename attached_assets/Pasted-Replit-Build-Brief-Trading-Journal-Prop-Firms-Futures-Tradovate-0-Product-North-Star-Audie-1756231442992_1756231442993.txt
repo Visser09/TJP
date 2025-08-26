@@ -1,0 +1,325 @@
+Replit Build Brief — Trading Journal (Prop Firms • Futures • Tradovate)
+0) Product North Star
+
+Audience: Futures traders using prop firms (Apex, TopStep, Take Profit Trader, etc.) trading via Tradovate.
+
+Promise: Zero-manual journaling. Clean, Apple-simple UI. AI that actually helps.
+
+Scope: Futures only. Multi-account (Eval, PA, etc.). Tradovate single sign-on + auto sync.
+
+1) Tech Stack
+
+Frontend: React + Vite, Tailwind + shadcn/ui, React Query.
+
+Backend: FastAPI (Python) or Node/Express; Postgres for data.
+
+Auth: Email/password (next step: OAuth), session/JWT.
+
+Integrations: Tradovate (trades, balances, positions), Economic calendar (CPI, NFP, FOMC, etc.; see §6).
+
+AI: /api/ai-insights/* endpoints for insights + chat.
+
+Note: We already have good UI shells for AI chat/insights, dashboard widgets, and account connection—reuse/upgrade these rather than reinvent. (See existing components referenced in notes below.)
+
+2) Information Architecture & Data Model
+Tables (Postgres)
+users(id pk, email unique, password_hash, created_at)
+trading_accounts(id pk, user_id fk, provider enum['tradovate'], ext_account_id, 
+                 nickname, account_type enum['eval','pa','other'], status enum['active','disabled'],
+                 last_sync_at, created_at)
+
+trades(id pk, user_id fk, trading_account_id fk, symbol, side enum['long','short'],
+       qty numeric, entry_price numeric, exit_price numeric, entry_time timestamptz,
+       exit_time timestamptz, fees numeric default 0, pnl numeric, tags jsonb default '[]')
+
+journal_entries(id pk, user_id fk, trading_account_id fk null, trade_id fk null,
+                entry_date date, title, body text, attachments jsonb, created_at)
+
+daily_metrics(id pk, user_id fk, trading_account_id fk null, trade_date date,
+              gross_pnl numeric, net_pnl numeric, win_count int, loss_count int, 
+              max_drawdown numeric, stats jsonb, UNIQUE(user_id, trading_account_id, trade_date))
+
+economic_events(id pk, date date, time time null, timezone text default 'America/New_York',
+                country text, importance enum['low','medium','high'], 
+                category text, title text, source text, source_event_id text)
+
+ai_insights(id pk, user_id fk, type enum['performance','risk','pattern','suggestion'],
+            title text, content text, created_at)
+
+Key Rules
+
+Multi-account: every trade/journal/metric links to a trading_account_id. Users can label accounts (Eval, PA, Other).
+
+Day P&L: sum trades by (user, account, date in ET).
+
+Economic events: normalized to ET; CPI/NFP/FOMC flagged importance='high'.
+
+3) API Contracts (Minimal)
+Tradovate
+
+POST /api/tradovate/connect → begin OAuth / token exchange (store creds securely).
+
+POST /api/tradovate/sync { userId, accountId } → fetch new trades/positions, backfill.
+
+GET /api/trading-accounts?userId= → list accounts and status.
+
+Trades/Analytics
+
+GET /api/trades?userId=&accountId=&from=&to=&limit=
+
+GET /api/analytics/performance?userId=&accountId=&range=1D|1W|1M → summary + series.
+
+GET /api/analytics/daily?userId=&accountId=&month=YYYY-MM → calendar data (counts + PnL per day).
+
+Journaling
+
+POST /api/journal { userId, entry_date, accountId?, body, title?, attachments? }
+
+GET /api/journal?userId=&month=YYYY-MM → entries per day.
+
+Economic Events
+
+GET /api/econ?month=YYYY-MM&tz=America/New_York → list with CPI/NFP/etc.
+
+AI
+
+GET /api/ai-insights?userId=&limit=3
+
+POST /api/ai-insights/generate { userId }
+
+POST /api/ai-insights/chat { userId, message } → streaming later.
+
+(These match the existing front-end calls we already use in AI insights/chat and dashboard. )
+
+4) Calendar (Match the Photo Exactly)
+Visual Spec
+
+Month grid with rounded squares.
+
+Color logic:
+
+Green = market open session day.
+
+Red = market closed day (weekends + CME holidays).
+
+Event pills inside the cell (right/top area) for CPI, NFP, FOMC, Fed Chair, Core PCE etc.
+
+Hover state: subtle lift/outline. Click opens journal modal for that date.
+
+Color Tokens (Tailwind CSS variables)
+--market-open: hsl(160, 84%, 39%);   /* green */
+--market-closed: hsl(0, 84%, 60%);   /* red */
+--event-pill: hsl(206, 100%, 50%);   /* apple blue */
+
+Calendar Rules (ET timezone)
+
+Mark Sat/Sun as market closed (red).
+
+Weekdays = market open (green) except CME holidays list (config/DB).
+
+Economic events: show as pills; if multiple, stack with “+N” overflow.
+
+Cell contents:
+
+Date number (top-left).
+
+Trades count (badge) & Day P&L (+$ / -$) at bottom area if trades exist.
+
+Has Journal dot.
+
+Clicking opens Journal Modal (new/edit), pre-select date and account.
+
+We already have a great starting point in enhanced-calendar.tsx (grid, badges, journal modal hook). Reuse the structure but swap the color logic + economic events + market open/closed palette to match photo.
+
+Backend for Calendar
+
+GET /api/analytics/daily?userId=&accountId=&month=YYYY-MM
+
+Returns: { days: [{ date, trades, pnl, hasJournal, isOpenMarket }] }
+
+GET /api/econ?month=YYYY-MM
+
+Returns events (CPI, NFP, etc.)
+
+Front-end Calendar Props
+type Day = {
+  date: string; // YYYY-MM-DD (ET)
+  isOpenMarket: boolean; // drives green/red
+  trades: number;
+  pnl: number;           // net for the day
+  hasJournal: boolean;
+  events: { id: string; title: string; importance: 'low'|'medium'|'high' }[];
+};
+
+<TradingCalendar
+  userId={userId}
+  month="2025-08"
+  onOpenJournal={(date) => openJournalModal(date)}
+/>
+
+5) Dashboard & Views
+Dashboard (Home)
+
+Top: Quick Actions (Add Trade, Sync Tradovate, Calendar, AI Coach). (Reuse + keep visual elevation.)
+
+Widgets (toggleable + reorder):
+
+Metrics (Daily/Weekly P&L, Win Rate, Account Balance/Max DD).
+
+Performance Chart (select 1D/1W/1M).
+
+Recent Trades (last 5 per selected account).
+
+AI Insights (3 cards + “Chat with AI Coach” CTA).
+
+Account Switcher (Eval, PA, etc.) — filters whole page.
+
+AI Coach
+
+Chat (Q&A about performance, rules, psychology) and Insights feed (auto cards). We already have strong starting components.
+
+Accounts
+
+Tradovate connection card with status, last sync, benefits, and modal to connect. (Keep the “Why Tradovate?” explainer.)
+
+Global UI
+
+Apple-like: dark mode default, heavy on glass/blur, rounded corners. We already have tokens & theme provider; keep it.
+
+6) Economic Events (CPI/NFP/FOMC)
+Ingestion
+
+Create a econ_fetcher.py cron (or server job) that hits a chosen provider (placeholders now), stores into economic_events.
+
+Normalize to ET. Titles must include CPI, Non-Farm Payrolls, FOMC Rate Decision, Fed Chair Speech, Core PCE, ISM, Retail Sales.
+
+Mark importance='high' for CPI/NFP/FOMC.
+
+Display
+
+In calendar cells, render pill: short title (e.g., CPI, Non-Farm E…). Use Tooltip for full text.
+
+Legend: green “market open”, red “market close”, blue pill for events.
+
+7) Multi-Account (Eval, PA, etc.)
+
+On connect, list all Tradovate accounts → allow user to nickname + account_type (eval, pa, other).
+
+Every synced trade → must resolve to the correct trading_account_id.
+
+Filters: Global account switcher affects dashboard, calendar, analytics, AI.
+
+8) AI Features (MVP done, upgrade behavior)
+
+/api/ai-insights/generate builds 2–5 cards:
+
+Performance trend (win rate, avg RR).
+
+Risk alert (drawdown, over-sizing).
+
+Pattern (time-of-day edge, instrument edge).
+
+Suggestion (rule or checklist).
+
+Chat endpoint (/api/ai-insights/chat) must be able to answer:
+
+“Show me mistakes this week in Eval vs PA.”
+
+“What changed since CPI day?”
+
+“Why is my DD larger on Mondays?”
+
+Wire AI to both journal text and daily metrics for context. (We already use these endpoints in the UI.)
+
+9) UX/Visual Details To Match
+
+Calendar cell: rounded XL, subtle texture/noise, green (open) vs red (closed) background, date numeral top-left, event pill top-right, bottom badges for trades/P&L. (Matches the provided photo.)
+
+Header: sticky, shows Tradovate connection state + user avatar.
+
+Sidebar: icon-only, Apple-ish hover states. Keep theme toggle at bottom.
+
+10) Acceptance Criteria (QA Checklist)
+Calendar
+
+ Weekends + CME holidays are red; other weekdays are green.
+
+ CPI & NFP show as event pills; tooltip shows full title/time.
+
+ Day shows trades count and P&L when present.
+
+ Clicking any day opens journal modal prefilled with the date; saving updates immediately.
+
+Multi-Account
+
+ Connecting Tradovate lists all accounts; user can set Eval/PA labels.
+
+ One trade in Eval and one in PA on same day both appear and aggregate separately when account is switched.
+
+ Dashboard/Calendar/AI switch content when user changes account context.
+
+AI
+
+ /api/ai-insights/generate returns at least 3 cards with actionable language.
+
+ Chat can reference journal entries and daily metrics by date/account in responses.
+
+Performance & Polish
+
+ All endpoints respond in <300ms for typical month views.
+
+ Dark mode default; theme toggle persists in localStorage.
+
+ No clutter: all numbers are readable, large, and consistent with Apple-like design.
+
+11) Build Tasks (Sprint-sized)
+
+Calendar Upgrade
+
+Add isOpenMarket & events to calendar API.
+
+Render green/red backgrounds; add CPI/NFP pills; legend.
+
+Tradovate Multi-Account
+
+Connect flow + list accounts + nickname + type.
+
+Sync jobs write trades to proper trading_account_id.
+
+Analytics Layer
+
+Implement daily_metrics job.
+
+Add account-scoped GET /api/analytics/performance and GET /api/analytics/daily.
+
+AI Integration
+
+Generate insights from daily_metrics, trades, journal_entries.
+
+Ensure chat handler can filter by date/account.
+
+UI Polish
+
+Account switcher (top-right).
+
+Tighten dashboard card spacing, typography, and consistent rounding.
+
+12) Sample Tailwind Tokens (use/extend)
+
+bg-[color:var(--market-open)], bg-[color:var(--market-closed)]
+
+Pills: rounded-full px-2 py-0.5 text-[11px] bg-apple-blue/90 text-white
+
+Cell: rounded-2xl border border-white/10 hover:border-apple-blue/40 transition
+
+13) Notes (existing components to reuse)
+
+Calendar base + Journal modal hook: enhanced-calendar.tsx (grid, states, modal call)
+
+Dashboard shell + Quick actions: dashboard.tsx
+
+Tradovate connect card: account-connections.tsx (modal open, status UI)
+
+AI Insights feed: ai-insights.tsx (list + “Generate” CTA)
+
+AI Chat interface: ai-coach.tsx + chat-interface.tsx (messages, input, mutation)
