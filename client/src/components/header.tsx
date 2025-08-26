@@ -36,11 +36,11 @@ export default function Header() {
           </div>
         </div>
         
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-2 sm:space-x-4">
           {/* Account Switcher */}
-          <div className="glass-morphism rounded-xl px-4 py-2">
+          <div className="glass-morphism rounded-xl px-2 sm:px-4 py-2">
             <select 
-              className="bg-transparent text-white text-sm focus:outline-none cursor-pointer"
+              className="bg-transparent text-white text-xs sm:text-sm focus:outline-none cursor-pointer"
               value={selectedAccount}
               onChange={(e) => setSelectedAccount(e.target.value)}
               data-testid="select-account"
@@ -52,18 +52,18 @@ export default function Header() {
           </div>
           
           {/* Tradovate Status */}
-          <div className="flex items-center space-x-2 glass-morphism rounded-xl px-4 py-2" data-testid="status-tradovate">
+          <div className="hidden sm:flex items-center space-x-2 glass-morphism rounded-xl px-4 py-2" data-testid="status-tradovate">
             <div className="w-2 h-2 bg-green-400 rounded-full"></div>
             <span className="text-sm">Tradovate Connected</span>
           </div>
           
           {/* User Avatar */}
           <button 
-            className="w-10 h-10 bg-gradient-to-br from-purple-400 to-blue-500 rounded-full flex items-center justify-center hover:scale-105 transition-transform"
+            className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-purple-400 to-blue-500 rounded-full flex items-center justify-center hover:scale-105 transition-transform"
             data-testid="button-user-avatar"
             onClick={() => window.location.href = "/api/logout"}
           >
-            <span className="text-sm font-semibold" data-testid="text-user-initials">
+            <span className="text-xs sm:text-sm font-semibold" data-testid="text-user-initials">
               {getInitials(user)}
             </span>
           </button>

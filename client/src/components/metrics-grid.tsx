@@ -86,7 +86,7 @@ export default function MetricsGrid({ currentAccount }: MetricsGridProps) {
       {metrics.map((metric) => {
         const Icon = metric.icon;
         return (
-          <div key={metric.title} className="glass-morphism rounded-2xl p-6" data-testid={metric.testId}>
+          <div key={metric.title} className="glass-morphism rounded-2xl p-4 sm:p-6 w-full overflow-hidden" data-testid={metric.testId}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-gray-400 text-sm font-medium">{metric.title}</h3>
               <Icon className={`w-5 h-5 ${metric.color}`} />

@@ -47,7 +47,7 @@ export default function RecentTrades({ currentAccount }: RecentTradesProps) {
   };
 
   return (
-    <div className="glass-morphism rounded-2xl p-6" data-testid="recent-trades">
+    <div className="glass-morphism rounded-2xl p-4 sm:p-6 w-full overflow-hidden" data-testid="recent-trades">
       <h3 className="text-lg font-semibold mb-4" data-testid="text-trades-title">Recent Trades</h3>
       
       <div className="space-y-3">

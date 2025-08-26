@@ -21,6 +21,18 @@ html, body {
   min-height: 100vh;
 }
 
+/* Ensure all containers properly handle overflow */
+.container {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Fix chart and component responsiveness */
+.glass-morphism {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 :root {
   --background: hsl(0, 0%, 100%);
   --foreground: hsl(210, 25%, 7.8431%);

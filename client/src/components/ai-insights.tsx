@@ -104,7 +104,7 @@ export default function AiInsights({ currentAccount }: AiInsightsProps) {
   };
 
   return (
-    <div className="glass-morphism rounded-2xl p-6" data-testid="ai-insights">
+    <div className="glass-morphism rounded-2xl p-4 sm:p-6 w-full overflow-hidden" data-testid="ai-insights">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold" data-testid="text-insights-title">AI Insights</h3>
         <button 

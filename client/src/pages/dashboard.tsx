@@ -55,12 +55,12 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="w-full min-h-screen bg-black text-white overflow-x-hidden">
-      <div className="flex w-full">
+    <div className="min-h-screen bg-black text-white overflow-x-hidden">
+      <div className="flex">
         <Sidebar />
-        <div className="flex-1 ml-16 sm:ml-20 w-full">
+        <div className="flex-1 min-w-0 ml-16 sm:ml-20">
           <Header />
-          <main className="p-4 sm:p-6 lg:p-8 space-y-6 lg:space-y-8 w-full max-w-none">
+          <main className="p-4 sm:p-6 lg:p-8 space-y-6 lg:space-y-8">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <QuickActions 
                 currentAccount={currentAccount}
@@ -78,15 +78,15 @@ export default function Dashboard() {
             <MetricsGrid currentAccount={currentAccount} />
             
             {/* Main Content Grid */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8 w-full">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8">
               {/* AI Insights & Recent Trades */}
-              <div className="space-y-6 w-full">
+              <div className="space-y-6 min-w-0">
                 <AiInsights currentAccount={currentAccount} />
                 <RecentTrades currentAccount={currentAccount} />
               </div>
               
               {/* Performance Chart */}
-              <div className="w-full">
+              <div className="min-w-0">
                 <PerformanceChart currentAccount={currentAccount} />
               </div>
             </div>

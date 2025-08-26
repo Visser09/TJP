@@ -23,10 +23,10 @@ export default function PerformanceChart({ currentAccount }: PerformanceChartPro
   ];
 
   return (
-    <div className="glass-morphism rounded-2xl p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-bold">Performance Overview</h2>
-        <div className="flex space-x-2">
+    <div className="glass-morphism rounded-2xl p-4 sm:p-6 w-full overflow-hidden" data-testid="performance-chart">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+        <h2 className="text-lg sm:text-xl font-bold">Performance Overview</h2>
+        <div className="flex space-x-2 flex-shrink-0">
           {timeframes.map((tf) => (
             <Button
               key={tf.value}
