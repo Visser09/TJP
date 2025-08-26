@@ -207,6 +207,16 @@ export async function handleEmailIngest(req: Request, res: Response) {
 // Generate unique ingest token for user
 export async function generateIngestToken(userId: string): Promise<string> {
   try {
+    // Ensure user exists first
+    const [user] = await db.select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+      
+    if (!user) {
+      throw new Error(`User with ID ${userId} not found`);
+    }
+    
     // Check if user already has active token
     const [existing] = await db.select()
       .from(userIngestTokens)

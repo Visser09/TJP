@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { db } from './db';
-import { trades, userIngestTokens, journalEntries, dailyMetrics } from '@shared/schema';
+import { trades, userIngestTokens, journalEntries, dailyMetrics, users } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
@@ -237,6 +237,16 @@ export async function getTradingViewWebhookConfig(req: Request, res: Response) {
     const userId = (req.user as any)?.claims?.sub;
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    // Ensure user exists first
+    const [user] = await db.select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+      
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
     }
     
     // Generate or get existing token

@@ -1,13 +1,18 @@
 import React, { useState } from "react";
-import { Settings as SettingsIcon, User, Bell, Shield, Database, Save } from "lucide-react";
+import { Settings as SettingsIcon, User, Bell, Shield, Database, Save, RefreshCw, Mail, Upload, Link, Copy, CheckCircle } from "lucide-react";
 import Sidebar from "@/components/sidebar";
 import Header from "@/components/header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { ImportCsvModal } from "@/components/import-csv-modal";
+import { useLocation } from "wouter";
 
 interface UserSettings {
   notifications: {
@@ -31,6 +36,9 @@ interface UserSettings {
 export default function Settings() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
+  const [isImportCsvOpen, setIsImportCsvOpen] = useState(false);
+  const [copiedItem, setCopiedItem] = useState<string | null>(null);
   
   const { data: settings, isLoading } = useQuery<UserSettings>({
     queryKey: ['/api/user/settings'],
@@ -56,6 +64,36 @@ export default function Settings() {
       };
     }
   });
+
+  // Get ingest token and forwarding address
+  const { data: ingestConfig } = useQuery({
+    queryKey: ['/api/settings/ingest-token'],
+    retry: false,
+  });
+
+  // Get TradingView webhook config
+  const { data: webhookConfig } = useQuery({
+    queryKey: ['/api/settings/tradingview-webhook'],
+    retry: false,
+  });
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedItem(label);
+      toast({
+        title: "Copied!",
+        description: `${label} copied to clipboard`,
+      });
+      setTimeout(() => setCopiedItem(null), 2000);
+    } catch (err) {
+      toast({
+        title: "Copy failed",
+        description: "Please copy manually",
+        variant: "destructive",
+      });
+    }
+  };
 
   const [formData, setFormData] = useState<UserSettings | null>(null);
 
@@ -316,6 +354,116 @@ export default function Settings() {
                 </div>
               </div>
 
+              {/* Trading Integration */}
+              <div className="bg-gray-900/50 backdrop-blur-xl rounded-xl border border-white/10 p-6">
+                <div className="flex items-center mb-4">
+                  <Link className="w-5 h-5 mr-2 text-apple-blue" />
+                  <h2 className="text-xl font-semibold" data-testid="text-integration-title">
+                    Trading Integration
+                  </h2>
+                </div>
+                <div className="space-y-4">
+                  {/* Tradovate Sync */}
+                  <div className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <RefreshCw className="w-5 h-5 text-green-400" />
+                      <div>
+                        <h3 className="font-medium">Sync Tradovate</h3>
+                        <p className="text-sm text-gray-400">Connect your Tradovate account for automatic trade sync</p>
+                      </div>
+                      <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Available</Badge>
+                    </div>
+                    <Button
+                      className="bg-green-600 hover:bg-green-700"
+                      data-testid="button-sync-tradovate"
+                      onClick={() => {
+                        toast({
+                          title: "Coming Soon",
+                          description: "Tradovate integration will be available soon!",
+                        });
+                      }}
+                    >
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Connect
+                    </Button>
+                  </div>
+
+                  {/* Auto-Import Setup */}
+                  <div className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <Mail className="w-5 h-5 text-apple-blue" />
+                      <div>
+                        <h3 className="font-medium">Auto-Import</h3>
+                        <p className="text-sm text-gray-400">Email forwarding and webhook setup for automatic data ingestion</p>
+                      </div>
+                      <Badge className="bg-apple-blue/20 text-apple-blue border-apple-blue/30">Active</Badge>
+                    </div>
+                    <Button
+                      className="bg-apple-blue hover:bg-apple-blue/80"
+                      data-testid="button-setup-autoimport"
+                      onClick={() => navigate('/auto-import')}
+                    >
+                      <Mail className="w-4 h-4 mr-2" />
+                      Configure
+                    </Button>
+                  </div>
+
+                  {/* CSV Import */}
+                  <div className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <Upload className="w-5 h-5 text-orange-400" />
+                      <div>
+                        <h3 className="font-medium">Import CSV</h3>
+                        <p className="text-sm text-gray-400">Upload trade data from files or export reports</p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      className="border-gray-700 text-white hover:bg-gray-800"
+                      data-testid="button-import-csv"
+                      onClick={() => setIsImportCsvOpen(true)}
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Import
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Auto-Import Status */}
+              {ingestConfig?.forwardingAddress && (
+                <div className="bg-gray-900/50 backdrop-blur-xl rounded-xl border border-white/10 p-6">
+                  <div className="flex items-center mb-4">
+                    <Database className="w-5 h-5 mr-2 text-apple-blue" />
+                    <h2 className="text-xl font-semibold">Auto-Import Status</h2>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                      <span className="text-sm text-gray-300">Email forwarding configured</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-400">Forward emails to:</span>
+                      <code className="bg-gray-800 px-2 py-1 rounded text-xs">{ingestConfig.forwardingAddress}</code>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => copyToClipboard(ingestConfig.forwardingAddress, 'Email address')}
+                        className="h-6 w-6 p-0"
+                      >
+                        {copiedItem === 'Email address' ? <CheckCircle className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                      </Button>
+                    </div>
+                    {webhookConfig?.webhookUrl && (
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-green-400" />
+                        <span className="text-sm text-gray-300">TradingView webhooks ready</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Account Management */}
               <div className="bg-gray-900/50 backdrop-blur-xl rounded-xl border border-white/10 p-6">
                 <div className="flex items-center mb-4">
@@ -357,6 +505,12 @@ export default function Settings() {
           </div>
         </main>
       </div>
+      
+      {/* CSV Import Modal */}
+      <ImportCsvModal 
+        isOpen={isImportCsvOpen} 
+        onOpenChange={setIsImportCsvOpen} 
+      />
     </div>
   );
 }

@@ -19,36 +19,6 @@ const actions = [
     color: "text-apple-blue",
     testId: "button-add-trade",
   },
-  {
-    name: "Sync Tradovate",
-    icon: RefreshCw,
-    color: "text-green-400",
-    testId: "button-sync-tradovate",
-  },
-  {
-    name: "Auto-Import",
-    icon: Mail,
-    color: "text-cyan-400",
-    testId: "button-auto-import",
-  },
-  {
-    name: "Calendar View",
-    icon: Calendar,
-    color: "text-purple-400",
-    testId: "button-calendar-view",
-  },
-  {
-    name: "AI Coach",
-    icon: Brain,
-    color: "text-blue-400",
-    testId: "button-ai-coach",
-  },
-  {
-    name: "Import CSV",
-    icon: Upload,
-    color: "text-orange-400",
-    testId: "button-import-csv",
-  },
 ];
 
 interface QuickActionsProps {
@@ -106,11 +76,6 @@ export default function QuickActions({ currentAccount, onSyncTrades }: QuickActi
   };
   const actionHandlers = {
     "Add Trade": () => setIsAddTradeOpen(true),
-    "Sync Tradovate": () => onSyncTrades?.(),
-    "Auto-Import": () => navigate('/auto-import'),
-    "Calendar View": () => navigate('/calendar'),
-    "AI Coach": () => navigate('/ai-coach'),
-    "Import CSV": () => setIsImportCsvOpen(true),
   };
 
   return (
