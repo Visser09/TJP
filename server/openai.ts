@@ -75,7 +75,7 @@ export async function generateTradingInsights(trades: any[], journalEntries: any
   }
 }
 
-export async function generateChatResponse(message: string, accountId?: string, conversationHistory: any[] = []): Promise<string> {
+export async function generateChatResponse(message: string, accountId?: string, conversationHistory: any[] = [], userId?: string): Promise<string> {
   try {
     // Build context from conversation history
     const historyMessages = conversationHistory.slice(-8).map(msg => ({
@@ -107,8 +107,25 @@ export async function generateChatResponse(message: string, accountId?: string, 
           - Performance analysis and improvement
           - Market timing and execution quality
           
+          ABOUT THE TRADING JOURNAL APP:
+          - This is TradingJournal Pro, designed specifically for prop firm traders
+          - Features include: automated trade syncing via Tradovate, AI insights generation, journal entries, performance analytics
+          - Users can connect multiple trading accounts (Eval, PA, Live) from different prop firms
+          - The app tracks daily metrics, P&L, win rates, and compliance with prop firm rules
+          - Journal entries help traders reflect on their performance and improve
+          - AI insights analyze trading patterns and provide personalized recommendations
+          
+          APP FEATURES YOU CAN HELP WITH:
+          - Setting up Tradovate integration for automated trade syncing
+          - Understanding performance metrics and analytics
+          - Creating effective journal entries and trading notes
+          - Interpreting AI-generated insights and recommendations
+          - Optimizing settings for different prop firm requirements
+          - Using the calendar for economic events and trade planning
+          
           Keep responses helpful, specific, and actionable. Focus on building consistent, profitable habits that align with prop firm requirements. Be encouraging but emphasize discipline and risk management above all.
-          ${accountId ? `User's current account ID: ${accountId}` : ''}`
+          ${accountId ? `User's current account ID: ${accountId}` : ''}
+          ${userId ? `This conversation is for user: ${userId}` : ''}`
         },
         ...historyMessages,
         {
@@ -116,7 +133,7 @@ export async function generateChatResponse(message: string, accountId?: string, 
           content: message
         }
       ],
-      max_tokens: 1000,
+      max_completion_tokens: 1000,
       temperature: 0.7
     });
 

@@ -266,7 +266,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { message, accountId, conversationHistory } = req.body;
       
       // Generate AI response using OpenAI
-      const response = await generateChatResponse(message, accountId, conversationHistory);
+      const response = await generateChatResponse(message, accountId, conversationHistory, userId);
       
       res.json({ response });
     } catch (error) {
