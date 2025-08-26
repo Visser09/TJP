@@ -213,9 +213,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { accountId, startDate, endDate } = req.query;
       const metrics = await storage.getDailyMetrics(
         userId,
-        accountId as string,
-        startDate as string,
-        endDate as string
+        accountId as string
       );
       res.json(metrics);
     } catch (error) {
@@ -228,7 +226,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/economic-events', isAuthenticated, async (req: any, res) => {
     try {
       const { startDate, endDate } = req.query;
-      const events = await storage.getEconomicEvents(startDate as string, endDate as string);
+      const events = await storage.getEconomicEvents(startDate as string);
       res.json(events);
     } catch (error) {
       console.error("Error fetching economic events:", error);
@@ -275,8 +273,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const [trades, dailyMetrics] = await Promise.all([
-        storage.getTrades(userId, accountId as string, startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]),
-        storage.getDailyMetrics(userId, accountId as string, startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0])
+        storage.getTrades(userId, accountId as string, startDate.toISOString().split('T')[0]),
+        storage.getDailyMetrics(userId, accountId as string, startDate.toISOString().split('T')[0])
       ]);
 
       // Calculate analytics
@@ -370,7 +368,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getJournalEntries(userId, undefined, context?.accountId)
       ]);
 
-      const response = await generateChatResponse(message, { trades, journalEntries, context });
+      const response = await generateChatResponse(message, context?.accountId, [{ role: 'user', content: message }], userId);
       
       res.json({ response });
     } catch (error) {
@@ -390,7 +388,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // This would integrate with Tradovate API
-      const result = await tradovateAPI.syncTrades(accountId, credentials);
+      const result = { message: 'Tradovate sync not yet implemented', accountId };
       
       res.json(result);
     } catch (error) {

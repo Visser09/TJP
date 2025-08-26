@@ -144,7 +144,7 @@ export default function AiInsights({ currentAccount }: AiInsightsProps) {
                       {insight.title}
                     </h4>
                     <p className="text-sm text-gray-300" data-testid={`insight-content-${insight.type}`}>
-                      {insight.content}
+                      {typeof insight.content === 'string' ? insight.content : JSON.stringify(insight.content)}
                     </p>
                   </div>
                 </div>
